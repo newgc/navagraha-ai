@@ -63,6 +63,25 @@ pnpm db:grant-role --phone 98765 43210 --role OPS_MANAGER --actor "Your name"
 pnpm db:grant-role --phone 98765 43210 --role OPS_MANAGER --actor "Your name" --revoke
 ```
 
+## Concierge (manual) bookings
+
+Operations staff create bookings taken by phone or WhatsApp (FS §12.1). All routes need an
+operations role; see `apps/api/src/bookings/booking.schemas.ts` for the request bodies.
+
+| Step                                                                | Route                                                              | Who                           |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------- |
+| Create booking, travellers, itinerary, locked quote, supplier items | `POST /v1/bookings/manual`                                         | Coordinator, Manager          |
+| List / view                                                         | `GET /v1/bookings?from=&to=&state=`, `GET /v1/bookings/NAV-001001` | Ops, Finance                  |
+| Supplier item: ask → confirm / decline                              | `POST /v1/fulfilments/{id}/request` · `/confirm` · `/decline`      | Coordinator, Manager          |
+| Replacement supplier item                                           | `POST /v1/bookings/{ref}/fulfilments`                              | Coordinator, Manager          |
+| Record an offline payment (D-19 step 1)                             | `POST /v1/bookings/{ref}/payments/offline`                         | Coordinator, Manager, Finance |
+| Confirm / reject it (D-19 step 2, a different person)               | `POST /v1/payments/{id}/confirm` · `/reject`                       | Finance, Manager              |
+| Waive the balance (e.g. complimentary pilot)                        | `POST /v1/bookings/{ref}/payments/waive`                           | Manager                       |
+
+The itinerary is checked structurally and needs the coordinator's sign-off that they checked
+timings by hand (D-20). The booking confirms itself, and its Trip is created, as soon as the
+payment condition and every mandatory supplier item are both satisfied (FS §33).
+
 ## Checks
 
 ```sh

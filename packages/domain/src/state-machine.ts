@@ -138,3 +138,21 @@ export function edges<S extends string>(def: MachineDefinition<S>) {
     return froms.map((from) => ({ from, to: t.to, rule: t }));
   });
 }
+
+/**
+ * For a person holding several roles: the first role (in the order given) that the machine
+ * allows for this transition. If none is allowed, returns the most informative failure.
+ */
+export function decideForRoles<S extends string>(
+  def: MachineDefinition<S>,
+  req: Omit<TransitionRequest<NoInfer<S>>, 'role'>,
+  roles: readonly Role[],
+): Decision<S> & { role?: Role } {
+  let failure: Decision<S> | null = null;
+  for (const role of roles) {
+    const d = decide(def, { ...req, role });
+    if (d.ok) return { ...d, role };
+    if (!failure || failure.error === 'ROLE_NOT_ALLOWED') failure = d;
+  }
+  return failure ?? { ok: false, error: 'ROLE_NOT_ALLOWED', message: `${def.name}: no role given` };
+}

@@ -5,3 +5,7 @@ export * from './rules/fulfilment.js';
 export * from './rules/confirmation-gate.js';
 export * from './rules/passport.js';
 export * from './phone.js';
+export * from './catalog.js';
+export * from './rules/quote.js';
+export * from './rules/concierge-itinerary.js';
+export * from './rules/offline-payment.js';

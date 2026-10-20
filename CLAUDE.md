@@ -18,6 +18,11 @@ Product Owner decisions in `docs/decisions/` override the FS.
 - Open business policy (D-06 refunds/deposit, D-07 GST, D-08 rates) is configuration, never
   hard-coded. Don't silently decide it — raise it.
 - Money is integer paise.
+- A person acts with their roles in `inActingOrder` (staff before CUSTOMER), so history records
+  the coordinator, not the customer role every user also holds. System steps use `systemActor`
+  with the triggering user kept.
+- Offline payments need two different people (D-19); itineraries are not engine-checked until
+  P2 and say so in `validation.level` (D-20).
 
 ## Conventions
 

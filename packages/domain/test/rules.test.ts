@@ -89,10 +89,13 @@ describe('paymentConditionMet', () => {
     expect(() => paymentConditionMet(100, [], { kind: 'DEPOSIT_PERCENT', percent: 0 })).toThrow();
   });
 
-  it('NOT_REQUIRED payments satisfy the condition', () => {
-    expect(
-      paymentConditionMet(500, [{ state: 'NOT_REQUIRED', capturedPaise: 0, refundedPaise: 0 }]),
-    ).toBe(true);
+  it('a waived (NOT_REQUIRED) amount counts like money received', () => {
+    const waived = (capturedPaise: number) =>
+      ({ state: 'NOT_REQUIRED', capturedPaise, refundedPaise: 0 }) as const;
+    const failed = { state: 'FAILED', capturedPaise: 0, refundedPaise: 0 } as const;
+    expect(paymentConditionMet(500, [failed, waived(500)])).toBe(true);
+    expect(paymentConditionMet(500, [paid(200), waived(300)])).toBe(true);
+    expect(paymentConditionMet(500, [waived(499)])).toBe(false);
   });
 
   it('rejects non-integer money', () => {

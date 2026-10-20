@@ -12,7 +12,10 @@ export type PaymentState =
 
 export interface PaymentSnapshot {
   state: PaymentState;
-  /** Amount captured by the gateway, in paise. */
+  /**
+   * Amount captured, in paise. For NOT_REQUIRED this is the amount waived, which counts
+   * toward the payment condition exactly like money received.
+   */
   capturedPaise: number;
   /** Amount refunded and confirmed by the gateway, in paise. */
   refundedPaise: number;
@@ -29,7 +32,10 @@ export const DEFAULT_PAYMENT_POLICY: PaymentConditionPolicy = { kind: 'FULL_PAYM
 
 export function netPaidPaise(payments: readonly PaymentSnapshot[]): number {
   return payments
-    .filter((p) => p.state === 'SUCCESS' || p.state === 'PARTIALLY_REFUNDED')
+    .filter(
+      (p) =>
+        p.state === 'SUCCESS' || p.state === 'PARTIALLY_REFUNDED' || p.state === 'NOT_REQUIRED',
+    )
     .reduce((sum, p) => sum + p.capturedPaise - p.refundedPaise, 0);
 }
 
@@ -43,7 +49,6 @@ export function paymentConditionMet(
   }
   if (policy.kind === 'NONE') return true;
   if (totalPaise === 0) return true;
-  if (payments.length > 0 && payments.every((p) => p.state === 'NOT_REQUIRED')) return true;
 
   const paid = netPaidPaise(payments);
   if (policy.kind === 'FULL_PAYMENT') return paid >= totalPaise;

@@ -24,11 +24,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const correlationId = req.correlationId;
 
     if (exception instanceof HttpException) {
+      // Keep structured details (e.g. validation findings) next to the message.
       const body = exception.getResponse();
-      const message = typeof body === 'string' ? body : (body as { message?: unknown }).message;
+      const details =
+        typeof body === 'string' ? { message: body } : (body as Record<string, unknown>);
       res.status(exception.getStatus()).json({
+        ...details,
         statusCode: exception.getStatus(),
-        message: message ?? exception.message,
+        message: details.message ?? exception.message,
         correlationId,
       });
       return;

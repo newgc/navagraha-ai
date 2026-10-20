@@ -54,7 +54,7 @@ export const paymentMachine = defineMachine({
       from: ['PENDING'],
       to: 'SUCCESS',
       by: ['PAYMENT_GATEWAY', 'SYSTEM'],
-      note: 'Verified webhook or server-side reconciliation only — never a client signal (FS §11.2).',
+      note: 'Verified webhook, server reconciliation, or a two-person confirmed offline receipt (D-19). Never a client signal (FS §11.2).',
     },
     { from: ['PENDING'], to: 'FAILED', by: ['PAYMENT_GATEWAY', 'SYSTEM'] },
     {

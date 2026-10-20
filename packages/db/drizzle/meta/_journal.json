@@ -22,6 +22,13 @@
       "when": 1792511538211,
       "tag": "0002_auth_otp_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792512798444,
+      "tag": "0003_manual_booking",
+      "breakpoints": true
     }
   ]
 }

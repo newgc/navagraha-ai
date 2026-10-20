@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { BookingsModule } from './bookings/bookings.module.js';
 import { APP_CONFIG, loadConfig } from './config.js';
 import { DbModule } from './db/db.module.js';
 import { HealthController } from './health/health.controller.js';
@@ -20,7 +21,7 @@ class ConfigModule {}
  * as they are built.
  */
 @Module({
-  imports: [ConfigModule, DbModule, AuditModule, AuthModule],
+  imports: [ConfigModule, DbModule, AuditModule, AuthModule, BookingsModule],
   controllers: [HealthController, TemplesController],
   providers: [TemplesService],
 })

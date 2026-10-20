@@ -61,3 +61,27 @@ export async function createTestApp(url: string) {
     },
   };
 }
+
+let phoneCounter = 0;
+
+/** Creates a user holding `roles` and signs them in through the real OTP flow. */
+export async function signInAs(
+  ctx: Awaited<ReturnType<typeof createTestApp>>,
+  roles: ('OPS_COORDINATOR' | 'OPS_MANAGER' | 'FINANCE' | 'CUSTOMER' | 'SYSTEM_ADMIN')[],
+) {
+  const { schema } = await import('@navagraha/db');
+  const request = (await import('supertest')).default;
+  phoneCounter++;
+  const phone = `+9170000${String(phoneCounter).padStart(5, '0')}`;
+  const [user] = await ctx.db.insert(schema.appUser).values({ phone }).returning();
+  if (roles.length) {
+    await ctx.db
+      .insert(schema.appUserRole)
+      .values(roles.map((role) => ({ userId: user!.id, role })));
+  }
+  const r = await request(ctx.app.getHttpServer()).post('/v1/auth/otp/request').send({ phone });
+  const v = await request(ctx.app.getHttpServer())
+    .post('/v1/auth/otp/verify')
+    .send({ challengeId: r.body.challengeId, code: ctx.otp.last().code });
+  return { userId: user!.id, header: { authorization: `Bearer ${v.body.token}` } };
+}
