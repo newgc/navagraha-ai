@@ -56,6 +56,7 @@ export function humanize(code: string | null | undefined): string {
 export function tone(state: string): 'good' | 'warn' | 'bad' | 'neutral' {
   if (
     [
+      'VERIFIED',
       'CONFIRMED',
       'SUCCESS',
       'COMPLETED',
@@ -69,7 +70,18 @@ export function tone(state: string): 'good' | 'warn' | 'bad' | 'neutral' {
     return 'good';
   }
   if (['CANCELLED', 'FAILED', 'DECLINED', 'EXPIRED', 'INCIDENT'].includes(state)) return 'bad';
-  if (['PENDING', 'PENDING_CONFIRMATION', 'REQUESTED', 'PARTIAL'].includes(state)) return 'warn';
+  if (
+    [
+      'PENDING',
+      'PENDING_CONFIRMATION',
+      'REQUESTED',
+      'PARTIAL',
+      'NEEDS_RECHECK',
+      'COLLECTED',
+    ].includes(state)
+  ) {
+    return 'warn';
+  }
   return 'neutral';
 }
 

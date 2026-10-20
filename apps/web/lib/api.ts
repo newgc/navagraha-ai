@@ -21,7 +21,11 @@ export type ApiResult<T> =
 
 export async function api<T>(
   path: string,
-  init: { method?: 'GET' | 'POST'; body?: unknown } = {},
+  init: {
+    method?: 'GET' | 'POST';
+    body?: unknown;
+    raw?: { bytes: Uint8Array; contentType: string };
+  } = {},
 ): Promise<ApiResult<T>> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   let res: Response;
@@ -29,10 +33,14 @@ export async function api<T>(
     res = await fetch(`${API_URL}/v1${path}`, {
       method: init.method ?? 'GET',
       headers: {
-        'content-type': 'application/json',
+        'content-type': init.raw?.contentType ?? 'application/json',
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      body: init.raw
+        ? (init.raw.bytes as BodyInit)
+        : init.body === undefined
+          ? undefined
+          : JSON.stringify(init.body),
       cache: 'no-store',
     });
   } catch {
@@ -69,4 +77,17 @@ export interface Me {
   roles: string[];
 }
 
-export const STAFF_ROLES = ['OPS_COORDINATOR', 'OPS_MANAGER', 'FINANCE'];
+export const STAFF_ROLES = [
+  'OPS_COORDINATOR',
+  'OPS_MANAGER',
+  'FINANCE',
+  'CONTENT_ADMIN',
+  'SYSTEM_ADMIN',
+];
+export const BOOKING_ROLES = ['OPS_COORDINATOR', 'OPS_MANAGER', 'FINANCE'];
+export const TEMPLE_DATA_ROLES = [
+  'CONTENT_ADMIN',
+  'OPS_MANAGER',
+  'OPS_COORDINATOR',
+  'SYSTEM_ADMIN',
+];

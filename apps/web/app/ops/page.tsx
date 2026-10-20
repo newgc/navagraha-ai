@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Badge } from '@/components/badge';
-import { api, errorText } from '@/lib/api';
+import { BOOKING_ROLES, api, errorText, type Me } from '@/lib/api';
 import { formatDate, formatRupees, humanize, todayIso } from '@/lib/format';
 
 interface Row {
@@ -31,6 +32,9 @@ export default async function BookingsPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; state?: string }>;
 }) {
+  // Content admins don't work with bookings; send them to temple data.
+  const me = await api<Me>('/me');
+  if (me.ok && !me.data.roles.some((r) => BOOKING_ROLES.includes(r))) redirect('/ops/temples');
   const sp = await searchParams;
   const from = sp.from || todayIso();
   const to = sp.to || todayIso(60);

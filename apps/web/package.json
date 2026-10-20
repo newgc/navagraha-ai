@@ -2,7 +2,7 @@
   "name": "@navagraha/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Customer web app / PWA (FS \u00a72.2).",
+  "description": "Customer web app / PWA (FS §2.2).",
   "type": "module",
   "scripts": {
     "dev": "next dev --port 3000",
@@ -24,6 +24,7 @@
     "@playwright/test": "^1.64.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "exceljs": "^4.4.0",
     "vitest": "^5.0.5"
   }
 }

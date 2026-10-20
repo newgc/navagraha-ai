@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { createDb, resetDatabase, seedDatabase } from '@navagraha/db';
+import type { Role } from '@navagraha/domain';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module.js';
@@ -63,7 +64,7 @@ let phoneCounter = 0;
 /** Creates a user holding `roles` and signs them in through the real OTP flow. */
 export async function signInAs(
   ctx: Awaited<ReturnType<typeof createTestApp>>,
-  roles: ('OPS_COORDINATOR' | 'OPS_MANAGER' | 'FINANCE' | 'CUSTOMER' | 'SYSTEM_ADMIN')[],
+  roles: Exclude<Role, 'SYSTEM' | 'PAYMENT_GATEWAY'>[],
 ) {
   const { schema } = await import('@navagraha/db');
   const request = (await import('supertest')).default;

@@ -353,3 +353,24 @@ ul.plain li {
   background: var(--neutral-bg);
   color: var(--neutral-fg);
 }
+
+/* Temple data */
+.checklist li.ok {
+  color: var(--good-fg);
+}
+.checklist li.todo {
+  color: var(--fg);
+}
+dl.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+dl.facts dt {
+  color: var(--muted);
+}
+dl.facts dd {
+  margin: 0;
+}

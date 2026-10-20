@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { STAFF_ROLES, api, type Me } from '@/lib/api';
+import { BOOKING_ROLES, STAFF_ROLES, TEMPLE_DATA_ROLES, api, type Me } from '@/lib/api';
 import { humanize } from '@/lib/format';
 import { signOut } from '../sign-in/actions';
 
@@ -21,8 +21,11 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
           Navagraha AI · Operations
         </Link>
         <nav>
-          <Link href="/ops">Bookings</Link>
+          {staffRoles.some((r) => BOOKING_ROLES.includes(r)) && <Link href="/ops">Bookings</Link>}
           {canCreate && <Link href="/ops/bookings/new">New booking</Link>}
+          {staffRoles.some((r) => TEMPLE_DATA_ROLES.includes(r)) && (
+            <Link href="/ops/temples">Temple data</Link>
+          )}
         </nav>
         <div className="who">
           <span>

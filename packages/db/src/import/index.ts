@@ -21,6 +21,8 @@ export interface ImportOptions {
   apply: boolean;
   /** Who ran the import, recorded in the audit log. */
   actor: string;
+  /** The signed-in user, when the import comes through the API. */
+  actorUserId?: string;
   fileName: string;
   correlationId?: string;
   /** Override "today" (YYYY-MM-DD) for tests. */
@@ -197,6 +199,7 @@ export async function importTempleWorkbook(
 
     await tx.insert(auditLog).values({
       action: 'master_data.temple_workbook_import',
+      actorUserId: opts.actorUserId ?? null,
       actorRole: 'CONTENT_ADMIN',
       entityType: 'temple_workbook',
       entityId: sha256,

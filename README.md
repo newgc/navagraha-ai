@@ -44,7 +44,9 @@ pnpm db:import-temples path/to/workbook.xlsx --actor "Your name"          # chec
 pnpm db:import-temples path/to/workbook.xlsx --actor "Your name" --apply  # import
 ```
 
-The check lists every problem by sheet, row and column. Nothing is written while there is
+Content admins can also do this in the browser at `/ops/temples` ("Check only", then "Check and
+import"), where the pilot-readiness checklist and each temple's data and verification status are
+shown. The check lists every problem by sheet, row and column. Nothing is written while there is
 any error. An import replaces schedules, special days, travel times and entry rules, updates
 temples, and only offers services marked Verified. Each import is recorded in the audit log
 with the file's SHA-256.
