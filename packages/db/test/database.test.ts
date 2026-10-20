@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createDb, migrateDatabase, schema, seedDatabase, type Database } from '../src/index.js';
+import { schema, seedDatabase, type Database } from '../src/index.js';
+import { freshDatabase } from './reset.js';
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -21,13 +22,7 @@ describe.skipIf(!url)('database', () => {
   let end: () => Promise<void>;
 
   beforeAll(async () => {
-    const conn = createDb(url!);
-    db = conn.db;
-    end = () => conn.pool.end();
-    await db.execute(sql`DROP SCHEMA IF EXISTS public CASCADE`);
-    await db.execute(sql`DROP SCHEMA IF EXISTS drizzle CASCADE`);
-    await db.execute(sql`CREATE SCHEMA public`);
-    await migrateDatabase(db);
+    ({ db, end } = await freshDatabase(url!));
   });
 
   afterAll(async () => end?.());
