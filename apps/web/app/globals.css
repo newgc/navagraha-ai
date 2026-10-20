@@ -1,0 +1,56 @@
+/* Placeholder styling until the Figma Design System V1.0 tokens are supplied. */
+:root {
+  --bg: #fffaf3;
+  --fg: #2b1a0e;
+  --muted: #6b5847;
+  --accent: #9a3412;
+  --accent-fg: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a120c;
+    --fg: #f5ebe0;
+    --muted: #c4b3a3;
+    --accent: #fb923c;
+    --accent-fg: #1a120c;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+}
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 4rem 1rem;
+}
+h1 {
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1.1;
+  margin: 0 0 1rem;
+}
+p {
+  color: var(--muted);
+  font-size: 1.125rem;
+}
+.cta {
+  display: inline-block;
+  margin-top: 1.5rem;
+  padding: 0.875rem 1.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  text-decoration: none;
+}
