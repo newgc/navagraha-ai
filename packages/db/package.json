@@ -23,9 +23,11 @@
     "migrate": "tsx src/scripts/migrate.ts",
     "seed": "tsx src/scripts/seed.ts",
     "test": "vitest run",
-    "import-temples": "tsx src/scripts/import-temples.ts"
+    "import-temples": "tsx src/scripts/import-temples.ts",
+    "grant-role": "tsx src/scripts/grant-role.ts"
   },
   "dependencies": {
+    "@navagraha/domain": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "exceljs": "^4.4.0",
     "pg": "^8.23.1"

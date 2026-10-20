@@ -16,7 +16,8 @@
     "db:seed": "pnpm --filter @navagraha/db seed",
     "dev:api": "pnpm --filter @navagraha/api dev",
     "dev:web": "pnpm --filter @navagraha/web dev",
-    "db:import-temples": "pnpm --filter @navagraha/db import-temples"
+    "db:import-temples": "pnpm --filter @navagraha/db import-temples",
+    "db:grant-role": "pnpm --filter @navagraha/db grant-role"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

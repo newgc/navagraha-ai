@@ -35,6 +35,34 @@ pnpm dev:api        # http://localhost:4000/v1/health
 pnpm dev:web        # http://localhost:3000
 ```
 
+## Temple data
+
+The content team fills `data/Navagraha_Temple_Data_Template.xlsx`. To load it:
+
+```sh
+pnpm db:import-temples path/to/workbook.xlsx --actor "Your name"          # check only
+pnpm db:import-temples path/to/workbook.xlsx --actor "Your name" --apply  # import
+```
+
+The check lists every problem by sheet, row and column. Nothing is written while there is
+any error. An import replaces schedules, special days, travel times and entry rules, updates
+temples, and only offers services marked Verified. Each import is recorded in the audit log
+with the file's SHA-256.
+
+## Sign-in and staff roles
+
+Everyone signs in with a phone number and a 6-digit code (`POST /v1/auth/otp/request`, then
+`POST /v1/auth/otp/verify`, which returns a bearer token). Until an SMS provider is chosen
+(D-11) codes are printed in the API log, and production refuses to start that way.
+
+Every API route needs a signed-in user unless it is marked `@Public()`. Staff roles are
+granted from the command line and audited:
+
+```sh
+pnpm db:grant-role --phone 98765 43210 --role OPS_MANAGER --actor "Your name"
+pnpm db:grant-role --phone 98765 43210 --role OPS_MANAGER --actor "Your name" --revoke
+```
+
 ## Checks
 
 ```sh

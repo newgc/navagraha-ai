@@ -25,6 +25,9 @@ Product Owner decisions in `docs/decisions/` override the FS.
 - NestJS: inject with explicit `@Inject(Token)`; there is no decorator-metadata emit, so
   constructor injection by type alone will not work.
 - API routes live under `/v1`. Every request has a correlation ID (`x-correlation-id`).
+- Every route requires a signed-in user unless marked `@Public()`; restrict with `@Roles(...)`.
+  Validate request bodies with zod via `parseBody`. Record sensitive mutations with
+  `AuditService`. Never put OTP codes, tokens or full phone numbers in logs (use `maskPhone`).
 - Tests: Vitest. DB/API suites need `TEST_DATABASE_URL` and wipe that database.
 - Schema changes: edit `packages/db/src/schema`, run `pnpm db:generate`, commit the migration.
 - Reference spec IDs (NAV-_, MR-_, EC-_, D-_) in code comments and commit messages where they

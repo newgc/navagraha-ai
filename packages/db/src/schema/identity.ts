@@ -6,6 +6,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -109,4 +110,47 @@ export const traveller = pgTable(
     ...timestamps(),
   },
   (t) => [index('traveller_booker_idx').on(t.bookerUserId)],
+);
+
+/**
+ * MR-01 — one-time sign-in codes. Only an HMAC of the code is stored, so a database
+ * leak does not reveal live codes. Rows are kept for rate limiting and audit.
+ */
+export const otpChallenge = pgTable(
+  'otp_challenge',
+  {
+    id: id(),
+    phone: text('phone').notNull(),
+    codeHash: text('code_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    attempts: smallint('attempts').notNull().default(0),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    requestIp: text('request_ip'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('otp_challenge_phone_idx').on(t.phone, t.createdAt),
+    index('otp_challenge_ip_idx').on(t.requestIp, t.createdAt),
+  ],
+);
+
+/** Signed-in sessions. Only a SHA-256 of the bearer token is stored. */
+export const authSession = pgTable(
+  'auth_session',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => appUser.id),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    userAgent: text('user_agent'),
+    ip: text('ip'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('auth_session_token_uq').on(t.tokenHash),
+    index('auth_session_user_idx').on(t.userId),
+  ],
 );

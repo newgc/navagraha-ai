@@ -7,6 +7,7 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
+import { Public } from '../auth/decorators.js';
 import { TemplesService } from './temples.service.js';
 
 const CODE = /^[A-Z0-9-]{3,32}$/;
@@ -17,6 +18,7 @@ function validCode(value: string, what: string): string {
 }
 
 /** FS §15: GET /temples, GET /temples/{id}. Public, read-only. */
+@Public()
 @Controller('temples')
 export class TemplesController {
   constructor(@Inject(TemplesService) private readonly temples: TemplesService) {}

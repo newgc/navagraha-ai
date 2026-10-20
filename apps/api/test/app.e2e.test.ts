@@ -1,38 +1,16 @@
-import 'reflect-metadata';
-import { createDb, migrateDatabase, seedDatabase } from '@navagraha/db';
-import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { sql } from 'drizzle-orm';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AppModule } from '../src/app.module.js';
-import { configureApp } from '../src/app.setup.js';
-import { APP_CONFIG, type AppConfig } from '../src/config.js';
+import { createTestApp } from './app.js';
 
 const url = process.env.TEST_DATABASE_URL;
 
 describe.skipIf(!url)('API e2e', () => {
   let app: NestExpressApplication;
+  let close: () => Promise<void>;
 
-  beforeAll(async () => {
-    const { db, pool } = createDb(url!);
-    await db.execute(sql`DROP SCHEMA IF EXISTS public CASCADE`);
-    await db.execute(sql`DROP SCHEMA IF EXISTS drizzle CASCADE`);
-    await db.execute(sql`CREATE SCHEMA public`);
-    await migrateDatabase(db);
-    await seedDatabase(db);
-    await pool.end();
-
-    const config: AppConfig = { NODE_ENV: 'test', API_PORT: 0, DATABASE_URL: url! };
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(APP_CONFIG)
-      .useValue(config)
-      .compile();
-    app = configureApp(moduleRef.createNestApplication<NestExpressApplication>({ logger: false }));
-    await app.init();
-  });
-
-  afterAll(async () => app?.close());
+  beforeAll(async () => ({ app, close } = await createTestApp(url!)));
+  afterAll(async () => close?.());
 
   it('GET /v1/health', async () => {
     const res = await request(app.getHttpServer()).get('/v1/health').expect(200);
