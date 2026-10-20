@@ -6,11 +6,16 @@ import {
   QUOTE_LINE_KINDS,
   SOURCE_CHANNELS,
   TEMPLATES,
+  CHANGE_KINDS,
+  REFUND_METHODS,
   bookingMachine,
+  cancellationMachine,
+  changeRequestMachine,
   fulfilmentComponentMachine,
   itineraryMachine,
   paymentMachine,
   quoteMachine,
+  refundMachine,
   tripMachine,
 } from '@navagraha/domain';
 import { sql } from 'drizzle-orm';
@@ -50,6 +55,11 @@ export const fulfilmentComponentState = pgEnum(
   states(fulfilmentComponentMachine),
 );
 export const tripState = pgEnum('trip_state', states(tripMachine));
+export const changeRequestState = pgEnum('change_request_state', states(changeRequestMachine));
+export const cancellationState = pgEnum('cancellation_state', states(cancellationMachine));
+export const refundState = pgEnum('refund_state', states(refundMachine));
+export const changeKind = pgEnum('change_kind', values(CHANGE_KINDS));
+export const refundMethod = pgEnum('refund_method', values(REFUND_METHODS));
 
 export const templateCode = pgEnum('template_code', values(TEMPLATES));
 export const planningMode = pgEnum('planning_mode', values(MODES));
@@ -281,5 +291,97 @@ export const trip = pgTable(
   (t) => [
     uniqueIndex('trip_booking_uq').on(t.bookingId),
     index('trip_start_date_idx').on(t.startDate),
+  ],
+);
+
+/** D-04 §4.4 — a change to a booking, proposed as complete new itinerary and quote versions. */
+export const changeRequest = pgTable(
+  'change_request',
+  {
+    id: id(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => booking.id),
+    state: changeRequestState('state').notNull(),
+    kind: changeKind('kind').notNull(),
+    /** What the customer asked for, in their words. */
+    description: text('description').notNull(),
+    requestedVia: sourceChannel('requested_via').notNull(),
+    requestedByUserId: uuid('requested_by_user_id').references(() => appUser.id),
+    proposedItineraryId: uuid('proposed_itinerary_id').references(() => itinerary.id),
+    proposedQuoteId: uuid('proposed_quote_id').references(() => quote.id),
+    /** Trip fields and traveller list that take effect when the change is applied. */
+    proposal: jsonb('proposal'),
+    acceptedVia: acceptanceChannel('accepted_via'),
+    decidedByUserId: uuid('decided_by_user_id').references(() => appUser.id),
+    decisionReason: text('decision_reason'),
+    ...timestamps(),
+  },
+  (t) => [
+    index('change_request_booking_idx').on(t.bookingId),
+    uniqueIndex('change_request_one_open_uq')
+      .on(t.bookingId)
+      .where(sql`state in ('REQUESTED', 'REVIEWING', 'APPROVED')`),
+  ],
+);
+
+/** D-04 §4.5 — cancellation, with the refund amount decided by people until D-06. */
+export const cancellation = pgTable(
+  'cancellation',
+  {
+    id: id(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => booking.id),
+    state: cancellationState('state').notNull(),
+    reason: text('reason').notNull(),
+    requestedVia: sourceChannel('requested_via').notNull(),
+    requestedByUserId: uuid('requested_by_user_id').references(() => appUser.id),
+    /** Proposed at review, fixed at approval. Never more than was paid. */
+    refundPaise: integer('refund_paise'),
+    refundNote: text('refund_note'),
+    reviewedByUserId: uuid('reviewed_by_user_id').references(() => appUser.id),
+    decidedByUserId: uuid('decided_by_user_id').references(() => appUser.id),
+    decisionReason: text('decision_reason'),
+    ...timestamps(),
+  },
+  (t) => [
+    index('cancellation_booking_idx').on(t.bookingId),
+    uniqueIndex('cancellation_one_open_uq')
+      .on(t.bookingId)
+      .where(sql`state in ('REQUESTED', 'REVIEWING', 'APPROVED', 'REFUND_PENDING')`),
+    check('cancellation_refund_chk', sql`${t.refundPaise} is null or ${t.refundPaise} >= 0`),
+  ],
+);
+
+/** Money returned to the customer (D-04 §2.2 Refund, D-19 extension: two people). */
+export const refund = pgTable(
+  'refund',
+  {
+    id: id(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => booking.id),
+    cancellationId: uuid('cancellation_id').references(() => cancellation.id),
+    state: refundState('state').notNull(),
+    method: refundMethod('method').notNull(),
+    amountPaise: integer('amount_paise').notNull(),
+    reference: text('reference').notNull(),
+    paidOn: date('paid_on').notNull(),
+    initiatedByUserId: uuid('initiated_by_user_id').references(() => appUser.id),
+    confirmedByUserId: uuid('confirmed_by_user_id').references(() => appUser.id),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    /** [{ paymentId, paise }] — which payments the money came back from. */
+    allocations: jsonb('allocations'),
+    reason: text('reason'),
+    ...timestamps(),
+  },
+  (t) => [
+    index('refund_booking_idx').on(t.bookingId),
+    check('refund_amount_chk', sql`${t.amountPaise} > 0`),
+    check(
+      'refund_two_person_chk',
+      sql`${t.confirmedByUserId} is null or ${t.initiatedByUserId} is null or ${t.confirmedByUserId} <> ${t.initiatedByUserId}`,
+    ),
   ],
 );

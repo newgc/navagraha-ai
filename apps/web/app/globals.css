@@ -374,3 +374,29 @@ dl.facts dt {
 dl.facts dd {
   margin: 0;
 }
+
+/* Changes and cancellation */
+.subcard {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+.button-link {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.refunds {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+}

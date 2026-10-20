@@ -1,15 +1,4 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Inject,
-  Param,
-  Post,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import type { AuthContext, AuthedRequest } from '../auth/auth.types.js';
 import { CurrentAuth, Roles } from '../auth/decorators.js';
 import { parseBody } from '../common/zod.js';
@@ -18,24 +7,78 @@ import {
   FulfilmentConfirmInput,
   FulfilmentInput,
   FulfilmentRequestInput,
+  CancellationInput,
+  ChangeRequestInput,
   ManualBookingInput,
   OfflinePaymentInput,
   ReasonInput,
+  RefundInput,
 } from './booking.schemas.js';
 import { BookingsService } from './bookings.service.js';
-
-const REFERENCE = /^NAV-\d{6,}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function valid(value: string, re: RegExp, what: string) {
-  if (!re.test(value)) throw new BadRequestException(`Invalid ${what}`);
-  return value;
-}
+import { CancellationsService } from './cancellations.service.js';
+import { ChangesService } from './changes.service.js';
+import { REFERENCE, UUID, valid } from './ids.js';
 
 /** Operations console API for concierge bookings (FS §12, §12.1). */
 @Controller('bookings')
 export class BookingsController {
-  constructor(@Inject(BookingsService) private readonly bookings: BookingsService) {}
+  constructor(
+    @Inject(BookingsService) private readonly bookings: BookingsService,
+    @Inject(ChangesService) private readonly changes: ChangesService,
+    @Inject(CancellationsService) private readonly cancellations: CancellationsService,
+  ) {}
+
+  /** FS §32 POST /bookings/{id}/change-request — record what the customer asked for. */
+  @Post(':reference/change-request')
+  @Roles('OPS_COORDINATOR', 'OPS_MANAGER')
+  async changeRequest(
+    @Param('reference') reference: string,
+    @Body() body: unknown,
+    @CurrentAuth() auth: AuthContext,
+    @Req() req: AuthedRequest,
+  ) {
+    const id = await this.bookings.idByReference(valid(reference, REFERENCE, 'booking reference'));
+    await this.changes.create(id, parseBody(ChangeRequestInput, body), auth, req.correlationId);
+    return this.bookings.detail(id);
+  }
+
+  /** FS §32 POST /bookings/{id}/cancel-request. */
+  @Post(':reference/cancel-request')
+  @Roles('OPS_COORDINATOR', 'OPS_MANAGER')
+  async cancelRequest(
+    @Param('reference') reference: string,
+    @Body() body: unknown,
+    @CurrentAuth() auth: AuthContext,
+    @Req() req: AuthedRequest,
+  ) {
+    const id = await this.bookings.idByReference(valid(reference, REFERENCE, 'booking reference'));
+    await this.cancellations.request(
+      id,
+      parseBody(CancellationInput, body),
+      auth,
+      req.correlationId,
+    );
+    return this.bookings.detail(id);
+  }
+
+  /** D-19 extension step 1 — Finance or a manager records a refund they paid. */
+  @Post(':reference/refunds')
+  @Roles('FINANCE', 'OPS_MANAGER')
+  async recordRefund(
+    @Param('reference') reference: string,
+    @Body() body: unknown,
+    @CurrentAuth() auth: AuthContext,
+    @Req() req: AuthedRequest,
+  ) {
+    const id = await this.bookings.idByReference(valid(reference, REFERENCE, 'booking reference'));
+    await this.cancellations.recordRefund(
+      id,
+      parseBody(RefundInput, body),
+      auth,
+      req.correlationId,
+    );
+    return this.bookings.detail(id);
+  }
 
   @Post('manual')
   @Roles('OPS_COORDINATOR', 'OPS_MANAGER')

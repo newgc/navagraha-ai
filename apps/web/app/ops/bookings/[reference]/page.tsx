@@ -22,6 +22,13 @@ import {
   requestSupplier,
   waiveBalance,
 } from './actions';
+import {
+  ChangesPanel,
+  RefundsBlock,
+  type Cancellation,
+  type ChangeRequest,
+  type Refunds,
+} from './changes-panel';
 
 interface Booking {
   id: string;
@@ -84,6 +91,8 @@ interface Booking {
       state: string;
       method: string;
       amountPaise: number;
+      capturedPaise: number;
+      refundedPaise: number;
       reference: string | null;
       receivedOn: string | null;
       recordedBy: string | null;
@@ -106,6 +115,9 @@ interface Booking {
   };
   confirmation: { open: boolean; waitingFor?: string[] };
   trip: { id: string; state: string } | null;
+  changeRequests: ChangeRequest[];
+  cancellations: Cancellation[];
+  refunds: Refunds;
   history: {
     machine: string;
     from: string | null;
@@ -115,6 +127,11 @@ interface Booking {
     recordedAt: string;
   }[];
 }
+
+const MACHINE_LABELS: Record<string, string> = {
+  FulfilmentComponent: 'Supplier item',
+  ChangeRequest: 'Change request',
+};
 
 const OPEN = ['REQUESTED', 'PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS'];
 
@@ -465,8 +482,29 @@ export default async function BookingPage({ params }: { params: Promise<{ refere
               </ActionForm>
             </details>
           )}
+          <RefundsBlock
+            reference={b.reference}
+            refunds={b.refunds}
+            canHandle={canConfirmPay}
+            myId={myId}
+          />
         </section>
       </div>
+
+      <ChangesPanel
+        reference={b.reference}
+        bookingState={b.state}
+        currentTotalPaise={b.quote?.totalPaise ?? 0}
+        currentStartDate={b.startDate}
+        travellerCount={b.travellers.length}
+        receivedPaise={b.payment.items
+          .filter((p) => p.state === 'SUCCESS' || p.state === 'PARTIALLY_REFUNDED')
+          .reduce((n, p) => n + p.capturedPaise - p.refundedPaise, 0)}
+        changes={b.changeRequests}
+        cancellations={b.cancellations}
+        isOps={isOps}
+        isManager={isManager}
+      />
 
       <section className="card">
         <h2>History</h2>
@@ -476,7 +514,7 @@ export default async function BookingPage({ params }: { params: Promise<{ refere
               <tr key={i}>
                 <td className="muted small">{formatDateTime(h.recordedAt)}</td>
                 <td>
-                  {h.machine === 'FulfilmentComponent' ? 'Supplier item' : h.machine}{' '}
+                  {MACHINE_LABELS[h.machine] ?? h.machine}{' '}
                   {h.from ? `${humanize(h.from)} → ` : 'created as '}
                   {humanize(h.to)}
                   {h.reason && <div className="muted small">{h.reason}</div>}

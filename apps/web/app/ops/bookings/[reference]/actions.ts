@@ -100,3 +100,96 @@ export async function addReplacement(
     ...(supplierName ? { supplierName } : {}),
   });
 }
+
+// ---------------------------------------------------------------- changes and cancellations
+
+export async function requestChange(reference: string, _: ActionState, form: FormData) {
+  return call(reference, `/bookings/${reference}/change-request`, {
+    kind: field(form, 'kind'),
+    description: field(form, 'description'),
+    requestedVia: field(form, 'requestedVia'),
+  });
+}
+
+export async function approveChange(reference: string, id: string, _: ActionState, form: FormData) {
+  return call(reference, `/change-requests/${id}/approve`, {
+    acceptedVia: field(form, 'acceptedVia'),
+  });
+}
+
+export async function rejectChange(reference: string, id: string, _: ActionState, form: FormData) {
+  return call(reference, `/change-requests/${id}/reject`, { reason: field(form, 'reason') });
+}
+
+export async function withdrawChange(
+  reference: string,
+  id: string,
+  _: ActionState,
+  _form: FormData,
+) {
+  return call(reference, `/change-requests/${id}/withdraw`, {});
+}
+
+export async function requestCancellation(reference: string, _: ActionState, form: FormData) {
+  return call(reference, `/bookings/${reference}/cancel-request`, {
+    reason: field(form, 'reason'),
+    requestedVia: field(form, 'requestedVia'),
+  });
+}
+
+export async function reviewCancellation(
+  reference: string,
+  id: string,
+  _: ActionState,
+  form: FormData,
+) {
+  const refundPaise = parseRupees(field(form, 'refund'));
+  if (refundPaise == null)
+    return { error: 'Enter the refund in rupees (0 if nothing is refunded)' };
+  return call(reference, `/cancellations/${id}/review`, {
+    refundPaise,
+    refundNote: field(form, 'refundNote'),
+  });
+}
+
+export async function approveCancellation(
+  reference: string,
+  id: string,
+  _: ActionState,
+  _form: FormData,
+) {
+  return call(reference, `/cancellations/${id}/approve`, {});
+}
+
+export async function rejectCancellation(
+  reference: string,
+  id: string,
+  _: ActionState,
+  form: FormData,
+) {
+  return call(reference, `/cancellations/${id}/reject`, { reason: field(form, 'reason') });
+}
+
+export async function recordRefund(reference: string, _: ActionState, form: FormData) {
+  const amountPaise = parseRupees(field(form, 'amount'));
+  if (!amountPaise) return { error: 'Enter the amount refunded' };
+  return call(reference, `/bookings/${reference}/refunds`, {
+    method: field(form, 'method'),
+    amountPaise,
+    reference: field(form, 'reference'),
+    paidOn: field(form, 'paidOn'),
+  });
+}
+
+export async function confirmRefund(
+  reference: string,
+  id: string,
+  _: ActionState,
+  _form: FormData,
+) {
+  return call(reference, `/refunds/${id}/confirm`, {});
+}
+
+export async function rejectRefund(reference: string, id: string, _: ActionState, form: FormData) {
+  return call(reference, `/refunds/${id}/reject`, { reason: field(form, 'reason') });
+}

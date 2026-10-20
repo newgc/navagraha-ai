@@ -121,3 +121,19 @@ describe('previewTotalPaise', () => {
     ).toBeNull();
   });
 });
+
+describe('toChangeProposalPayload', () => {
+  it('keeps existing travellers by id and sends only what a change can alter', async () => {
+    const { toChangeProposalPayload } = await import('../lib/booking-form');
+    const f = form();
+    f.travellers[0] = { ...f.travellers[0]!, travellerId: '11111111-1111-1111-1111-111111111111' };
+    const r = toChangeProposalPayload(f);
+    if (!r.ok) throw new Error('expected ok');
+    expect(Object.keys(r.payload).sort()).toEqual(['itinerary', 'quote', 'travellers', 'trip']);
+    expect(r.payload.travellers).toEqual([
+      { travellerId: '11111111-1111-1111-1111-111111111111' },
+      expect.objectContaining({ fullName: 'Kamala', isLead: true }),
+    ]);
+    expect(r.payload.quote).not.toHaveProperty('acceptedVia');
+  });
+});

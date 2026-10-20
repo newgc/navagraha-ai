@@ -1,5 +1,6 @@
 import { api, type Me } from '@/lib/api';
-import { NewBookingForm } from './new-booking-form';
+import { BookingForm } from '@/components/booking-form';
+import { createBooking } from './actions';
 
 export const metadata = { title: 'New booking — Navagraha AI' };
 
@@ -20,7 +21,7 @@ export default async function NewBookingPage() {
     <>
       <h1>New booking</h1>
       <p className="muted">For bookings taken by phone, WhatsApp or in person.</p>
-      <NewBookingForm temples={temples.ok ? temples.data.temples : []} />
+      <BookingForm temples={temples.ok ? temples.data.temples : []} submit={createBooking} />
     </>
   );
 }

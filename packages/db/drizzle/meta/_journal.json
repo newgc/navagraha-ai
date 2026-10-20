@@ -29,6 +29,13 @@
       "when": 1792512798444,
       "tag": "0003_manual_booking",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792514524083,
+      "tag": "0004_changes_cancellations_refunds",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,8 @@ import { parseRupees } from './format';
 
 /** The new-booking form's state, as the client component holds it. */
 export interface TravellerRow {
+  /** Set for a traveller already on file; their profile is kept as it is. */
+  travellerId?: string;
   fullName: string;
   ageBand: string;
   relationshipToBooker: string;
@@ -93,14 +95,18 @@ export function toManualBookingPayload(
     ok: true,
     payload: {
       booker: { phone: f.bookerPhone.trim(), name: opt(f.bookerName) },
-      travellers: f.travellers.map((t, i) => ({
-        fullName: t.fullName.trim(),
-        ageBand: t.ageBand,
-        relationshipToBooker: t.relationshipToBooker,
-        needsWheelchair: t.needsWheelchair || undefined,
-        mobilityNotes: opt(t.mobilityNotes),
-        isLead: i === f.leadIndex || undefined,
-      })),
+      travellers: f.travellers.map((t, i) =>
+        t.travellerId
+          ? { travellerId: t.travellerId, isLead: i === f.leadIndex || undefined }
+          : {
+              fullName: t.fullName.trim(),
+              ageBand: t.ageBand,
+              relationshipToBooker: t.relationshipToBooker,
+              needsWheelchair: t.needsWheelchair || undefined,
+              mobilityNotes: opt(t.mobilityNotes),
+              isLead: i === f.leadIndex || undefined,
+            },
+      ),
       trip: {
         startDate: f.startDate,
         template: f.template,
@@ -145,4 +151,33 @@ export function previewTotalPaise(lines: LineRow[]): number | null {
     total += qty * unit + tax;
   }
   return total;
+}
+
+/** POST /v1/change-requests/{id}/proposal body: the parts of the booking a change can alter. */
+export function toChangeProposalPayload(
+  f: BookingFormState,
+): { ok: true; payload: Record<string, unknown> } | { ok: false; errors: string[] } {
+  const built = toManualBookingPayload(f);
+  if (!built.ok) return built;
+  const p = built.payload as {
+    trip: Record<string, unknown>;
+    travellers: unknown[];
+    itinerary: unknown;
+    quote: { lines: unknown[]; validUntil: string };
+  };
+  return {
+    ok: true,
+    payload: {
+      trip: {
+        startDate: p.trip.startDate,
+        template: p.trip.template,
+        mode: p.trip.mode,
+        pickupLocation: p.trip.pickupLocation,
+        pickupTime: p.trip.pickupTime,
+      },
+      travellers: p.travellers,
+      itinerary: p.itinerary,
+      quote: { lines: p.quote.lines, validUntil: p.quote.validUntil },
+    },
+  };
 }

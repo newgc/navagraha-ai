@@ -9,3 +9,4 @@ export * from './catalog.js';
 export * from './rules/quote.js';
 export * from './rules/concierge-itinerary.js';
 export * from './rules/offline-payment.js';
+export * from './rules/refund.js';

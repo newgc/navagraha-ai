@@ -3,21 +3,15 @@ import { schema, type Database } from '@navagraha/db';
 import {
   OFFLINE_PAYMENT_METHODS,
   bookingMachine,
-  calculateQuote,
   checkOfflineConfirmation,
   confirmationGate,
   deriveFulfilmentState,
   fulfilmentComponentMachine,
   inActingOrder,
-  itineraryMachine,
   netPaidPaise,
   normalizePhone,
   paymentMachine,
-  quoteMachine,
-  tripMachine,
-  validateConciergeItinerary,
   type PaymentConditionPolicy,
-  type PaymentSnapshot,
 } from '@navagraha/domain';
 import {
   BadRequestException,
@@ -28,9 +22,10 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { and, asc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { AuditService } from '../audit/audit.service.js';
+import { BookingCore, snapshot, today, type BookingRow } from './booking-core.js';
 import type { AuthContext } from '../auth/auth.types.js';
 import { DB } from '../db/db.module.js';
 import {
@@ -50,21 +45,11 @@ import type {
 
 const { booking, itinerary, quote, payment, fulfilmentComponent: component, trip } = schema;
 
-const today = () => new Date().toISOString().slice(0, 10);
 const asActor = (auth: AuthContext): Actor => ({
   userId: auth.userId,
   roles: inActingOrder(auth.roles),
 });
 const OPEN_STATES = ['REQUESTED', 'PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS'] as const;
-
-/** For the confirmation gate a waived (NOT_REQUIRED) amount counts like money received. */
-function snapshot(p: typeof payment.$inferSelect): PaymentSnapshot {
-  return {
-    state: p.state,
-    capturedPaise: p.state === 'NOT_REQUIRED' ? p.amountPaise : p.capturedPaise,
-    refundedPaise: p.refundedPaise,
-  };
-}
 
 /**
  * Concierge (manual) bookings, offline payments and supplier confirmation — FS §12, §12.1,
@@ -76,6 +61,7 @@ export class BookingsService {
     @Inject(DB) private readonly db: Database,
     @Inject(TransitionService) private readonly transitions: TransitionService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(BookingCore) private readonly core: BookingCore,
   ) {}
 
   // ---------------------------------------------------------------- create
@@ -90,12 +76,7 @@ export class BookingsService {
     if (new Date(input.quote.validUntil) <= new Date()) {
       throw new BadRequestException('quote.validUntil must be in the future');
     }
-    let priced: ReturnType<typeof calculateQuote>;
-    try {
-      priced = calculateQuote(input.quote.lines);
-    } catch (e) {
-      throw new BadRequestException(`quote: ${(e as Error).message}`);
-    }
+    const priced = this.core.price(input.quote.lines);
 
     const bookingId = await this.db.transaction(async (tx) => {
       const [circ] = await tx
@@ -103,12 +84,7 @@ export class BookingsService {
         .from(schema.circuit)
         .where(eq(schema.circuit.code, input.trip.circuitCode));
       if (!circ) throw new BadRequestException(`Unknown circuit ${input.trip.circuitCode}`);
-      const circuitTemples = await tx
-        .select({ id: schema.temple.id, code: schema.temple.code })
-        .from(schema.circuitTemple)
-        .innerJoin(schema.temple, eq(schema.temple.id, schema.circuitTemple.templeId))
-        .where(eq(schema.circuitTemple.circuitId, circ.id))
-        .orderBy(asc(schema.circuitTemple.displayOrder));
+      const circuitTemples = await this.core.circuitTemples(tx, circ.id);
       const templeIdByCode = new Map(circuitTemples.map((t) => [t.code, t.id]));
 
       // Booker: the phone number is the identity (MR-01).
@@ -136,54 +112,7 @@ export class BookingsService {
         .values({ userId: booker.id, role: 'CUSTOMER' })
         .onConflictDoNothing();
 
-      // Travellers: new profiles, or existing ones that belong to this booker.
-      const travellers: { id: string; ageBand: string; isLead: boolean }[] = [];
-      for (const t of input.travellers) {
-        if ('travellerId' in t) {
-          const [existing] = await tx
-            .select()
-            .from(schema.traveller)
-            .where(
-              and(
-                eq(schema.traveller.id, t.travellerId),
-                eq(schema.traveller.bookerUserId, booker.id),
-              ),
-            );
-          if (!existing)
-            throw new BadRequestException(`Traveller ${t.travellerId} not found for this booker`);
-          travellers.push({ id: existing.id, ageBand: existing.ageBand, isLead: !!t.isLead });
-        } else {
-          const tPhone = t.phone ? normalizePhone(t.phone) : null;
-          const ePhone = t.emergencyContactPhone ? normalizePhone(t.emergencyContactPhone) : null;
-          if (t.phone && !tPhone) throw new BadRequestException(`${t.fullName}: invalid phone`);
-          if (t.emergencyContactPhone && !ePhone) {
-            throw new BadRequestException(`${t.fullName}: invalid emergency contact phone`);
-          }
-          const [row] = await tx
-            .insert(schema.traveller)
-            .values({
-              bookerUserId: booker.id,
-              fullName: t.fullName,
-              ageBand: t.ageBand,
-              relationshipToBooker: t.relationshipToBooker,
-              phone: tPhone,
-              mobilityNotes: t.mobilityNotes ?? null,
-              needsWheelchair: t.needsWheelchair ?? false,
-              foodPreference: t.foodPreference ?? null,
-              emergencyContactName: t.emergencyContactName ?? null,
-              emergencyContactPhone: ePhone,
-              contactConsentAt: t.contactConsent ? new Date() : null,
-            })
-            .returning();
-          travellers.push({ id: row!.id, ageBand: row!.ageBand, isLead: !!t.isLead });
-        }
-      }
-      if (new Set(travellers.map((t) => t.id)).size !== travellers.length) {
-        throw new BadRequestException('The same traveller is listed twice');
-      }
-      if (travellers.filter((t) => t.isLead).length > 1) {
-        throw new BadRequestException('Only one traveller can be the lead traveller');
-      }
+      const travellers = await this.core.resolveTravellers(tx, booker.id, input.travellers);
 
       const fulfilment: z.infer<typeof FulfilmentInput>[] = input.fulfilment ?? [
         { slot: 'vehicle', kind: 'VEHICLE', mandatory: true },
@@ -199,22 +128,14 @@ export class BookingsService {
         .map((f) => f.capacity!);
 
       // D-20 structural check; the coordinator's sign-off is enforced by the input schema.
-      const check = validateConciergeItinerary({
+      const check = this.core.checkItinerary({
         template: input.trip.template,
         startDate: input.trip.startDate,
-        today: today(),
         circuitTempleCodes: circuitTemples.map((t) => t.code),
-        stops: input.itinerary.stops.map((s) => ({ ...s, templeCode: s.templeCode.toUpperCase() })),
+        stops: input.itinerary.stops,
         travellerCount: travellers.length,
         vehicleSeats: seats.length ? seats.reduce((a, b) => a + b, 0) : null,
       });
-      if (!check.ok) {
-        throw new UnprocessableEntityException({
-          message: 'The itinerary has problems',
-          errors: check.errors,
-          warnings: check.warnings,
-        });
-      }
 
       const seniorFriendly =
         input.trip.seniorFriendly ?? travellers.some((t) => t.ageBand.startsWith('SENIOR'));
@@ -240,110 +161,25 @@ export class BookingsService {
         .insert(schema.bookingTraveller)
         .values(travellers.map((t) => ({ bookingId: id, travellerId: t.id, isLead: t.isLead })));
 
-      // Itinerary v1: DRAFT → VALIDATED (system, D-20) → PROPOSED → ACCEPTED (by phone).
-      const itineraryId = randomUUID();
-      await tx.insert(itinerary).values({
-        id: itineraryId,
+      // Itinerary v1 and quote v1, both accepted by the customer on the phone.
+      const ctx = { actor, correlationId, sourceChannel: input.source.channel };
+      const itineraryId = await this.core.createItinerary(tx, ctx, {
         bookingId: id,
         version: 1,
-        state: 'DRAFT',
+        parentId: null,
         origin: 'MANUAL',
-        createdByUserId: auth.userId,
+        stops: input.itinerary.stops,
+        templeIdByCode,
+        warnings: check.warnings,
+        acceptedVia: input.quote.acceptedVia,
       });
-      await tx.insert(schema.itineraryStop).values(
-        input.itinerary.stops.map((s, i) => ({
-          itineraryId,
-          seq: i + 1,
-          day: s.day,
-          templeId: templeIdByCode.get(s.templeCode.toUpperCase())!,
-          plannedArrival: s.plannedArrival ?? null,
-          notes: s.notes ?? null,
-        })),
-      );
-      await this.transitions.created(tx, itineraryMachine, itineraryId, 'DRAFT', actor, opts);
-      await this.transitions.move(tx, itineraryMachine, itineraryId, 'DRAFT', 'VALIDATED', sys, {
-        ...opts,
-        reason: 'Structural check passed; timings checked by coordinator (D-20)',
-      });
-      await tx
-        .update(itinerary)
-        .set({
-          validation: {
-            level: 'STRUCTURAL_WITH_OPS_SIGN_OFF',
-            engineChecked: false,
-            warnings: check.warnings,
-            signedOffBy: auth.userId,
-            signedOffAt: new Date().toISOString(),
-          },
-        })
-        .where(eq(itinerary.id, itineraryId));
-      await this.transitions.move(
-        tx,
-        itineraryMachine,
-        itineraryId,
-        'VALIDATED',
-        'PROPOSED',
-        actor,
-        opts,
-      );
-      await this.transitions.move(
-        tx,
-        itineraryMachine,
-        itineraryId,
-        'PROPOSED',
-        'ACCEPTED',
-        actor,
-        {
-          ...opts,
-          reason: `Accepted by the customer via ${input.quote.acceptedVia}`,
-        },
-      );
-
-      // Quote v1: DRAFT → CALCULATED (system arithmetic) → PRESENTED → LOCKED.
-      const quoteId = randomUUID();
-      await tx.insert(quote).values({
-        id: quoteId,
+      const quoteId = await this.core.createQuote(tx, ctx, {
         bookingId: id,
         version: 1,
-        state: 'DRAFT',
-        subtotalPaise: priced.subtotalPaise,
-        taxPaise: priced.taxPaise,
-        totalPaise: priced.totalPaise,
-        pricingSource: 'MANUAL',
+        priced,
         validUntil: new Date(input.quote.validUntil),
-        createdByUserId: auth.userId,
+        acceptedVia: input.quote.acceptedVia,
       });
-      await tx.insert(schema.quoteLine).values(
-        priced.lines.map((l) => ({
-          quoteId,
-          seq: l.seq,
-          kind: l.kind as (typeof input.quote.lines)[number]['kind'],
-          description: l.description,
-          quantity: l.quantity,
-          unitPricePaise: l.unitPricePaise,
-          taxPaise: l.taxPaise,
-          lineTotalPaise: l.lineTotalPaise,
-        })),
-      );
-      await this.transitions.created(tx, quoteMachine, quoteId, 'DRAFT', actor, opts);
-      await this.transitions.move(tx, quoteMachine, quoteId, 'DRAFT', 'CALCULATED', sys, opts);
-      await this.transitions.move(
-        tx,
-        quoteMachine,
-        quoteId,
-        'CALCULATED',
-        'PRESENTED',
-        actor,
-        opts,
-      );
-      await this.transitions.move(tx, quoteMachine, quoteId, 'PRESENTED', 'LOCKED', actor, {
-        ...opts,
-        reason: `Accepted by the customer via ${input.quote.acceptedVia}`,
-      });
-      await tx
-        .update(quote)
-        .set({ lockedAt: new Date(), acceptedVia: input.quote.acceptedVia })
-        .where(eq(quote.id, quoteId));
 
       // Booking: REQUESTED (quote is LOCKED) → PENDING_CONFIRMATION.
       await tx
@@ -450,21 +286,7 @@ export class BookingsService {
     const [itin] = b.activeItineraryId
       ? await this.db.select().from(itinerary).where(eq(itinerary.id, b.activeItineraryId))
       : [];
-    const stops = itin
-      ? await this.db
-          .select({
-            seq: schema.itineraryStop.seq,
-            day: schema.itineraryStop.day,
-            plannedArrival: schema.itineraryStop.plannedArrival,
-            notes: schema.itineraryStop.notes,
-            templeCode: schema.temple.code,
-            templeName: schema.temple.commonName,
-          })
-          .from(schema.itineraryStop)
-          .innerJoin(schema.temple, eq(schema.temple.id, schema.itineraryStop.templeId))
-          .where(eq(schema.itineraryStop.itineraryId, itin.id))
-          .orderBy(asc(schema.itineraryStop.seq))
-      : [];
+    const stops = itin ? await this.stopsOf(itin.id) : [];
     const [q] = b.activeQuoteId
       ? await this.db.select().from(quote).where(eq(quote.id, b.activeQuoteId))
       : [];
@@ -499,13 +321,60 @@ export class BookingsService {
       policy: b.paymentPolicy as PaymentConditionPolicy,
     });
 
+    const [allItineraries, allQuotes, changes, cancellations, refunds, room] = await Promise.all([
+      this.db.select().from(itinerary).where(eq(itinerary.bookingId, b.id)),
+      this.db.select().from(quote).where(eq(quote.bookingId, b.id)),
+      this.db
+        .select()
+        .from(schema.changeRequest)
+        .where(eq(schema.changeRequest.bookingId, b.id))
+        .orderBy(desc(schema.changeRequest.createdAt)),
+      this.db
+        .select()
+        .from(schema.cancellation)
+        .where(eq(schema.cancellation.bookingId, b.id))
+        .orderBy(desc(schema.cancellation.createdAt)),
+      this.db
+        .select()
+        .from(schema.refund)
+        .where(eq(schema.refund.bookingId, b.id))
+        .orderBy(asc(schema.refund.createdAt)),
+      this.core.refundRoom(this.db, b),
+    ]);
+    const proposals = await Promise.all(
+      changes.map(async (c) => {
+        if (!c.proposedItineraryId || !c.proposedQuoteId) return null;
+        const [pq] = await this.db.select().from(quote).where(eq(quote.id, c.proposedQuoteId));
+        const pLines = await this.db
+          .select()
+          .from(schema.quoteLine)
+          .where(eq(schema.quoteLine.quoteId, c.proposedQuoteId))
+          .orderBy(asc(schema.quoteLine.seq));
+        const pStops = await this.stopsOf(c.proposedItineraryId);
+        return {
+          quote: pq && {
+            id: pq.id,
+            version: pq.version,
+            state: pq.state,
+            totalPaise: pq.totalPaise,
+            validUntil: pq.validUntil,
+            lines: pLines.map(({ quoteId: _, ...l }) => l),
+          },
+          stops: pStops,
+        };
+      }),
+    );
+
     const entityIds = [
       b.id,
-      itin?.id,
-      q?.id,
       t?.id,
+      ...allItineraries.map((x) => x.id),
+      ...allQuotes.map((x) => x.id),
       ...payments.map((p) => p.id),
       ...components.map((c) => c.id),
+      ...changes.map((c) => c.id),
+      ...cancellations.map((c) => c.id),
+      ...refunds.map((r) => r.id),
     ].filter((x): x is string => !!x);
     const history = await this.db
       .select()
@@ -576,6 +445,7 @@ export class BookingsService {
           method: p.method,
           amountPaise: p.amountPaise,
           capturedPaise: p.capturedPaise,
+          refundedPaise: p.refundedPaise,
           reference: p.reference,
           receivedOn: p.receivedOn,
           recordedBy: p.recordedByUserId,
@@ -589,6 +459,47 @@ export class BookingsService {
       },
       confirmation: gate,
       trip: t ? { id: t.id, state: t.state } : null,
+      changeRequests: changes.map((c, i) => ({
+        id: c.id,
+        state: c.state,
+        kind: c.kind,
+        description: c.description,
+        requestedVia: c.requestedVia,
+        requestedBy: c.requestedByUserId,
+        proposal:
+          c.proposal && proposals[i] ? { ...(c.proposal as object), ...proposals[i] } : null,
+        acceptedVia: c.acceptedVia,
+        decisionReason: c.decisionReason,
+        createdAt: c.createdAt,
+      })),
+      cancellations: cancellations.map((c) => ({
+        id: c.id,
+        state: c.state,
+        reason: c.reason,
+        requestedVia: c.requestedVia,
+        refundPaise: c.refundPaise,
+        refundNote: c.refundNote,
+        reviewedBy: c.reviewedByUserId,
+        decidedBy: c.decidedByUserId,
+        decisionReason: c.decisionReason,
+        createdAt: c.createdAt,
+      })),
+      refunds: {
+        /** How much more may be recorded as refunded right now. */
+        duePaise: Math.max(0, room.limit),
+        items: refunds.map((r) => ({
+          id: r.id,
+          state: r.state,
+          method: r.method,
+          amountPaise: r.amountPaise,
+          reference: r.reference,
+          paidOn: r.paidOn,
+          initiatedBy: r.initiatedByUserId,
+          confirmedBy: r.confirmedByUserId,
+          forCancellation: !!r.cancellationId,
+          reason: r.reason,
+        })),
+      },
       history: history.map((h) => ({
         machine: h.machine,
         entityId: h.entityId,
@@ -600,6 +511,22 @@ export class BookingsService {
         recordedAt: h.recordedAt,
       })),
     };
+  }
+
+  private stopsOf(itineraryId: string) {
+    return this.db
+      .select({
+        seq: schema.itineraryStop.seq,
+        day: schema.itineraryStop.day,
+        plannedArrival: schema.itineraryStop.plannedArrival,
+        notes: schema.itineraryStop.notes,
+        templeCode: schema.temple.code,
+        templeName: schema.temple.commonName,
+      })
+      .from(schema.itineraryStop)
+      .innerJoin(schema.temple, eq(schema.temple.id, schema.itineraryStop.templeId))
+      .where(eq(schema.itineraryStop.itineraryId, itineraryId))
+      .orderBy(asc(schema.itineraryStop.seq));
   }
 
   async idByReference(reference: string) {
@@ -978,89 +905,15 @@ export class BookingsService {
     return p;
   }
 
-  /** Serialises changes to one booking so the gate is evaluated on consistent data. */
-  private async lockBooking(tx: Tx, bookingId: string) {
-    const [b] = await tx.select().from(booking).where(eq(booking.id, bookingId)).for('update');
-    if (!b) throw new NotFoundException('Booking not found');
-    return b;
+  private lockBooking(tx: Tx, bookingId: string) {
+    return this.core.lockBooking(tx, bookingId);
   }
 
-  private async balance(tx: Tx, b: typeof booking.$inferSelect) {
-    const [q] = await tx.select().from(quote).where(eq(quote.id, b.activeQuoteId!));
-    const ps = await tx.select().from(payment).where(eq(payment.bookingId, b.id));
-    const paid = netPaidPaise(ps.map(snapshot));
-    const pending = ps.filter((p) => p.state === 'PENDING').reduce((s, p) => s + p.amountPaise, 0);
-    return { totalPaise: q!.totalPaise, dueAfterPending: q!.totalPaise - paid - pending };
+  private balance(tx: Tx, b: BookingRow) {
+    return this.core.balance(tx, b);
   }
 
-  /**
-   * Re-checks the parallel confirmation gate (FS §33) after any payment or fulfilment change.
-   * Opens: PENDING_CONFIRMATION → CONFIRMED and the Trip is created. Closes: back to pending.
-   */
-  private async reevaluate(tx: Tx, bookingId: string, triggeredBy: string, correlationId: string) {
-    const [b] = await tx.select().from(booking).where(eq(booking.id, bookingId));
-    if (!b || (b.state !== 'PENDING_CONFIRMATION' && b.state !== 'CONFIRMED')) return;
-    const [q] = await tx.select().from(quote).where(eq(quote.id, b.activeQuoteId!));
-    const ps = await tx.select().from(payment).where(eq(payment.bookingId, b.id));
-    const cs = await tx.select().from(component).where(eq(component.bookingId, b.id));
-    const gate = confirmationGate({
-      totalPaise: q!.totalPaise,
-      payments: ps.map(snapshot),
-      fulfilment: deriveFulfilmentState(cs),
-      policy: b.paymentPolicy as PaymentConditionPolicy,
-    });
-    const sys = systemActor(triggeredBy);
-
-    if (b.state === 'PENDING_CONFIRMATION' && gate.open) {
-      await this.transitions.move(
-        tx,
-        bookingMachine,
-        b.id,
-        'PENDING_CONFIRMATION',
-        'CONFIRMED',
-        sys,
-        {
-          correlationId,
-          reason: 'Payment condition met and all mandatory supplier items confirmed',
-        },
-      );
-      const [existing] = await tx
-        .select({ id: trip.id })
-        .from(trip)
-        .where(eq(trip.bookingId, b.id));
-      if (!existing) {
-        const tripId = randomUUID();
-        await tx
-          .insert(trip)
-          .values({ id: tripId, bookingId: b.id, state: 'SCHEDULED', startDate: b.startDate });
-        await this.transitions.created(tx, tripMachine, tripId, 'SCHEDULED', sys, {
-          correlationId,
-        });
-      }
-      await this.audit.record(
-        {
-          action: 'booking.confirmed',
-          correlationId,
-          actorUserId: triggeredBy,
-          entityType: 'booking',
-          entityId: b.id,
-        },
-        tx,
-      );
-      // Customer confirmation messages are sent from here once notifications exist (P6, NAV-NOT-001).
-    } else if (b.state === 'CONFIRMED' && !gate.open) {
-      await this.transitions.move(
-        tx,
-        bookingMachine,
-        b.id,
-        'CONFIRMED',
-        'PENDING_CONFIRMATION',
-        sys,
-        {
-          correlationId,
-          reason: `Confirmation gate closed: waiting for ${gate.waitingFor.join(' and ').toLowerCase()}`,
-        },
-      );
-    }
+  private reevaluate(tx: Tx, bookingId: string, triggeredBy: string, correlationId: string) {
+    return this.core.reevaluate(tx, bookingId, triggeredBy, correlationId);
   }
 }

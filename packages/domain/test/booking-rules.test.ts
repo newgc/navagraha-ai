@@ -169,3 +169,20 @@ describe('inActingOrder', () => {
     ]);
   });
 });
+
+describe('allocateRefund', () => {
+  it('takes from the newest payment first and never over-refunds one', async () => {
+    const { allocateRefund } = await import('../src/index.js');
+    const ps = [
+      { id: 'a', capturedPaise: 400000, refundedPaise: 0 },
+      { id: 'b', capturedPaise: 249500, refundedPaise: 49500 },
+    ];
+    expect(allocateRefund(ps, 100000)).toEqual([{ paymentId: 'b', paise: 100000 }]);
+    expect(allocateRefund(ps, 300000)).toEqual([
+      { paymentId: 'b', paise: 200000 },
+      { paymentId: 'a', paise: 100000 },
+    ]);
+    expect(() => allocateRefund(ps, 600001)).toThrow(/larger/);
+    expect(() => allocateRefund(ps, 0)).toThrow(/positive/);
+  });
+});

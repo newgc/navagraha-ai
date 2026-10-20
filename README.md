@@ -87,15 +87,26 @@ Add `E2E_SCREENSHOTS=<dir>` to save screenshots of the key screens.
 Operations staff create bookings taken by phone or WhatsApp (FS §12.1). All routes need an
 operations role; see `apps/api/src/bookings/booking.schemas.ts` for the request bodies.
 
-| Step                                                                | Route                                                              | Who                           |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------- |
-| Create booking, travellers, itinerary, locked quote, supplier items | `POST /v1/bookings/manual`                                         | Coordinator, Manager          |
-| List / view                                                         | `GET /v1/bookings?from=&to=&state=`, `GET /v1/bookings/NAV-001001` | Ops, Finance                  |
-| Supplier item: ask → confirm / decline                              | `POST /v1/fulfilments/{id}/request` · `/confirm` · `/decline`      | Coordinator, Manager          |
-| Replacement supplier item                                           | `POST /v1/bookings/{ref}/fulfilments`                              | Coordinator, Manager          |
-| Record an offline payment (D-19 step 1)                             | `POST /v1/bookings/{ref}/payments/offline`                         | Coordinator, Manager, Finance |
-| Confirm / reject it (D-19 step 2, a different person)               | `POST /v1/payments/{id}/confirm` · `/reject`                       | Finance, Manager              |
-| Waive the balance (e.g. complimentary pilot)                        | `POST /v1/bookings/{ref}/payments/waive`                           | Manager                       |
+| Step                                                                     | Route                                                                           | Who                           |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ----------------------------- |
+| Create booking, travellers, itinerary, locked quote, supplier items      | `POST /v1/bookings/manual`                                                      | Coordinator, Manager          |
+| List / view                                                              | `GET /v1/bookings?from=&to=&state=`, `GET /v1/bookings/NAV-001001`              | Ops, Finance                  |
+| Supplier item: ask → confirm / decline                                   | `POST /v1/fulfilments/{id}/request` · `/confirm` · `/decline`                   | Coordinator, Manager          |
+| Replacement supplier item                                                | `POST /v1/bookings/{ref}/fulfilments`                                           | Coordinator, Manager          |
+| Record an offline payment (D-19 step 1)                                  | `POST /v1/bookings/{ref}/payments/offline`                                      | Coordinator, Manager, Finance |
+| Confirm / reject it (D-19 step 2, a different person)                    | `POST /v1/payments/{id}/confirm` · `/reject`                                    | Finance, Manager              |
+| Waive the balance (e.g. complimentary pilot)                             | `POST /v1/bookings/{ref}/payments/waive`                                        | Manager                       |
+| Record a change the customer asked for                                   | `POST /v1/bookings/{ref}/change-request`                                        | Coordinator, Manager          |
+| Propose the new plan and price · apply when accepted · reject · withdraw | `POST /v1/change-requests/{id}/proposal` · `/approve` · `/reject` · `/withdraw` | Coordinator, Manager          |
+| Record a cancellation request · propose the refund                       | `POST /v1/bookings/{ref}/cancel-request` · `POST /v1/cancellations/{id}/review` | Coordinator, Manager          |
+| Approve / reject a cancellation                                          | `POST /v1/cancellations/{id}/approve` · `/reject`                               | Manager                       |
+| Record a refund paid (D-19, step 1)                                      | `POST /v1/bookings/{ref}/refunds`                                               | Finance, Manager              |
+| Confirm / reject it (a different person)                                 | `POST /v1/refunds/{id}/confirm` · `/reject`                                     | Finance, Manager              |
+
+A change is proposed as complete new itinerary and quote versions; when the customer accepts,
+the old versions are superseded (never edited). A new travel date asks every supplier again, and
+a higher total sends the booking back to pending until the difference is paid. Until D-06 sets
+refund tiers, a coordinator proposes each cancellation refund and a manager approves it.
 
 The itinerary is checked structurally and needs the coordinator's sign-off that they checked
 timings by hand (D-20). The booking confirms itself, and its Trip is created, as soon as the

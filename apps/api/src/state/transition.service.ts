@@ -34,6 +34,9 @@ const TABLES: Record<string, string> = {
   Payment: 'payment',
   FulfilmentComponent: 'fulfilment_component',
   Trip: 'trip',
+  ChangeRequest: 'change_request',
+  Cancellation: 'cancellation',
+  Refund: 'refund',
 };
 
 interface Options {

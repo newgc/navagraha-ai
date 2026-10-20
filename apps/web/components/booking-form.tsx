@@ -4,13 +4,14 @@ import { ACCEPTANCE_CHANNELS, MODES, QUOTE_LINE_KINDS, SOURCE_CHANNELS } from '@
 import { useState, useTransition } from 'react';
 import {
   previewTotalPaise,
+  toChangeProposalPayload,
   toManualBookingPayload,
   type BookingFormState,
   type LineRow,
   type TravellerRow,
 } from '@/lib/booking-form';
 import { AGE_BANDS, RELATIONSHIPS, formatRupees, humanize, todayIso } from '@/lib/format';
-import { createBooking, type CreateResult } from './actions';
+import type { CreateResult } from '@/app/ops/bookings/new/actions';
 
 interface Temple {
   code: string;
@@ -34,8 +35,25 @@ const blankLine = (): LineRow => ({
   tax: '',
 });
 
-export function NewBookingForm({ temples }: { temples: Temple[] }) {
-  const [f, setF] = useState<BookingFormState>({
+/**
+ * The booking form. `new` creates a concierge booking; `change` prepares a change-request
+ * proposal from the booking's current plan (booker and source are fixed, existing travellers
+ * are kept by reference).
+ */
+export function BookingForm({
+  temples,
+  mode = 'new',
+  initial,
+  submit: send,
+  submitLabel = 'Create booking',
+}: {
+  temples: Temple[];
+  mode?: 'new' | 'change';
+  initial?: Partial<BookingFormState>;
+  submit: (payload: Record<string, unknown>) => Promise<CreateResult>;
+  submitLabel?: string;
+}) {
+  const [f, setF] = useState<BookingFormState>(() => ({
     bookerPhone: '',
     bookerName: '',
     channel: 'PHONE',
@@ -54,7 +72,8 @@ export function NewBookingForm({ temples }: { temples: Temple[] }) {
     validUntil: todayIso(7),
     acceptedVia: 'PHONE',
     timingsChecked: false,
-  });
+    ...initial,
+  }));
   const [problems, setProblems] = useState<string[]>([]);
   const [result, setResult] = useState<CreateResult>({});
   const [pending, start] = useTransition();
@@ -92,52 +111,54 @@ export function NewBookingForm({ temples }: { temples: Temple[] }) {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const built = toManualBookingPayload(f);
+    const built = mode === 'change' ? toChangeProposalPayload(f) : toManualBookingPayload(f);
     if (!built.ok) {
       setProblems(built.errors);
       return;
     }
     setProblems([]);
-    start(async () => setResult(await createBooking(built.payload)));
+    start(async () => setResult(await send(built.payload)));
   }
 
   return (
     <form onSubmit={submit} className="booking-form">
-      <fieldset>
-        <legend>Booker</legend>
-        <div className="row">
-          <label>
-            Mobile number
-            <input
-              type="tel"
-              required
-              value={f.bookerPhone}
-              onChange={(e) => set('bookerPhone', e.target.value)}
-            />
-          </label>
-          <label>
-            Name
-            <input value={f.bookerName} onChange={(e) => set('bookerName', e.target.value)} />
-          </label>
-          <label>
-            Came in by
-            <select value={f.channel} onChange={(e) => set('channel', e.target.value)}>
-              {SOURCE_CHANNELS.map((c) => (
-                <option key={c} value={c}>
-                  {humanize(c)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Reference / note
-            <input
-              value={f.sourceReference}
-              onChange={(e) => set('sourceReference', e.target.value)}
-            />
-          </label>
-        </div>
-      </fieldset>
+      {mode === 'new' && (
+        <fieldset>
+          <legend>Booker</legend>
+          <div className="row">
+            <label>
+              Mobile number
+              <input
+                type="tel"
+                required
+                value={f.bookerPhone}
+                onChange={(e) => set('bookerPhone', e.target.value)}
+              />
+            </label>
+            <label>
+              Name
+              <input value={f.bookerName} onChange={(e) => set('bookerName', e.target.value)} />
+            </label>
+            <label>
+              Came in by
+              <select value={f.channel} onChange={(e) => set('channel', e.target.value)}>
+                {SOURCE_CHANNELS.map((c) => (
+                  <option key={c} value={c}>
+                    {humanize(c)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Reference / note
+              <input
+                value={f.sourceReference}
+                onChange={(e) => set('sourceReference', e.target.value)}
+              />
+            </label>
+          </div>
+        </fieldset>
+      )}
 
       <fieldset>
         <legend>Travellers</legend>
@@ -146,48 +167,57 @@ export function NewBookingForm({ temples }: { temples: Temple[] }) {
         </p>
         {f.travellers.map((t, i) => (
           <div className="row" key={i}>
-            <label>
-              Name
-              <input
-                aria-label={`Traveller ${i + 1} name`}
-                value={t.fullName}
-                onChange={(e) => setTraveller(i, { fullName: e.target.value })}
-              />
-            </label>
-            <label>
-              Age
-              <select
-                value={t.ageBand}
-                onChange={(e) => setTraveller(i, { ageBand: e.target.value })}
-              >
-                {Object.entries(AGE_BANDS).map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Relationship
-              <select
-                value={t.relationshipToBooker}
-                onChange={(e) => setTraveller(i, { relationshipToBooker: e.target.value })}
-              >
-                {Object.entries(RELATIONSHIPS).map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={t.needsWheelchair}
-                onChange={(e) => setTraveller(i, { needsWheelchair: e.target.checked })}
-              />
-              Wheelchair
-            </label>
+            {t.travellerId ? (
+              <span className="grow">
+                {t.fullName}{' '}
+                <span className="muted small">· {AGE_BANDS[t.ageBand] ?? t.ageBand} · on file</span>
+              </span>
+            ) : (
+              <>
+                <label>
+                  Name
+                  <input
+                    aria-label={`Traveller ${i + 1} name`}
+                    value={t.fullName}
+                    onChange={(e) => setTraveller(i, { fullName: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Age
+                  <select
+                    value={t.ageBand}
+                    onChange={(e) => setTraveller(i, { ageBand: e.target.value })}
+                  >
+                    {Object.entries(AGE_BANDS).map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Relationship
+                  <select
+                    value={t.relationshipToBooker}
+                    onChange={(e) => setTraveller(i, { relationshipToBooker: e.target.value })}
+                  >
+                    {Object.entries(RELATIONSHIPS).map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={t.needsWheelchair}
+                    onChange={(e) => setTraveller(i, { needsWheelchair: e.target.checked })}
+                  />
+                  Wheelchair
+                </label>
+              </>
+            )}
             <label className="check">
               <input
                 type="radio"
@@ -439,16 +469,18 @@ export function NewBookingForm({ temples }: { temples: Temple[] }) {
               onChange={(e) => set('validUntil', e.target.value)}
             />
           </label>
-          <label>
-            Customer accepted via
-            <select value={f.acceptedVia} onChange={(e) => set('acceptedVia', e.target.value)}>
-              {ACCEPTANCE_CHANNELS.map((c) => (
-                <option key={c} value={c}>
-                  {humanize(c)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {mode === 'new' && (
+            <label>
+              Customer accepted via
+              <select value={f.acceptedVia} onChange={(e) => set('acceptedVia', e.target.value)}>
+                {ACCEPTANCE_CHANNELS.map((c) => (
+                  <option key={c} value={c}>
+                    {humanize(c)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       </fieldset>
 
@@ -488,7 +520,7 @@ export function NewBookingForm({ temples }: { temples: Temple[] }) {
         </div>
       )}
       <button type="submit" disabled={pending}>
-        {pending ? 'Creating…' : 'Create booking'}
+        {pending ? 'Working…' : submitLabel}
       </button>
     </form>
   );

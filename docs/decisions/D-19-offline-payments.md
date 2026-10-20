@@ -32,3 +32,14 @@ intent for money that never passes through a gateway.
 - An Operations Manager can mark a booking's payment **NOT_REQUIRED** with a reason (e.g. a
   complimentary pilot trip). D-04 already allows this.
 - A recorded amount may not exceed the balance still due, which catches typing mistakes.
+
+## Extension — refunds paid out (20 October 2026)
+
+The same two-person rule applies to money going back to a customer. A Finance or Operations
+Manager user records the refund they paid (method, amount, UPI / bank reference, date) and a
+**different** Finance or Operations Manager user confirms it. Only then does the system mark
+the Refund CONFIRMED and reduce the payments it is allocated to (newest payment first).
+
+Until D-06 sets refund tiers, the refund amount for a cancellation is proposed by the
+coordinator with a note and approved by an Operations Manager; it can never exceed what was
+paid. Proposed by Claude while building cancellations; the Product Owner can reverse it.

@@ -25,6 +25,18 @@ export const STAFF = {
     name: 'Selvi (Coordinator)',
     role: 'OPS_COORDINATOR',
   },
+  coordinator3: {
+    phone: '+917000099005',
+    typed: '70000 99005',
+    name: 'Ravi (Coordinator)',
+    role: 'OPS_COORDINATOR',
+  },
+  manager: {
+    phone: '+917000099006',
+    typed: '70000 99006',
+    name: 'Divya (Manager)',
+    role: 'OPS_MANAGER',
+  },
   content: {
     phone: '+917000099003',
     typed: '70000 99003',
@@ -64,4 +76,19 @@ export async function signIn(
 export async function signOut(page: Page) {
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+}
+
+/** Creates a simple one-day phone booking through the form and returns its reference. */
+export async function createPhoneBooking(page: Page, bookerPhone: string) {
+  await page.getByRole('link', { name: 'New booking' }).click();
+  await page.getByLabel('Mobile number').fill(bookerPhone);
+  await page.getByLabel('Traveller 1 name').fill('Sundar');
+  await page.getByLabel('Vehicle seats').fill('4');
+  await page.getByLabel('Line 1 description').fill('Swift Dzire, 1 day');
+  await page.getByLabel('Line 1 price').fill('3000');
+  await page.getByLabel(/I have checked temple opening hours/).check();
+  await page.getByRole('button', { name: 'Create booking' }).click();
+  const heading = page.getByRole('heading', { name: /NAV-\d{6}/ });
+  await expect(heading).toBeVisible();
+  return (await heading.textContent())!.match(/NAV-\d{6}/)![0];
 }

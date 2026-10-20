@@ -47,3 +47,9 @@ export type QuoteLineKind = (typeof QUOTE_LINE_KINDS)[number];
 
 export const ACCEPTANCE_CHANNELS = ['PHONE', 'WHATSAPP', 'IN_PERSON', 'EMAIL'] as const;
 export type AcceptanceChannel = (typeof ACCEPTANCE_CHANNELS)[number];
+
+/** What a change request is about (FS §32 change-request, EC-19/20/27/28). */
+export const CHANGE_KINDS = ['DATE', 'TRAVELLERS', 'ITINERARY', 'PRICE', 'OTHER'] as const;
+export type ChangeKind = (typeof CHANGE_KINDS)[number];
+
+export const REFUND_METHODS = ['OFFLINE_UPI', 'OFFLINE_BANK_TRANSFER', 'CASH'] as const;
