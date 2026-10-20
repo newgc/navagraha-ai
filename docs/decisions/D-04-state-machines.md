@@ -1,14 +1,14 @@
-# D-04 — Canonical State Machines (DRAFT for Product Owner approval)
+# D-04 — Canonical State Machines
 
 |          |                                                       |
 | -------- | ----------------------------------------------------- |
 | Decision | D-04 State machines                                   |
-| Status   | **DRAFT — awaiting Product Owner approval**           |
+| Status   | **APPROVED as drafted** — Product Owner, 20 Oct 2026  |
 | Baseline | MVP Functional Specification V1.1 §33 (supersedes §7) |
 | Owner    | Vaithy — Product Owner                                |
 | Prepared | 20 October 2026                                       |
 
-This draft turns the state lists in FS §33 into explicit transitions: who may make each change, what must be true first, and what happens as a result. Where §33 is silent or ambiguous, the proposal is marked **[PROPOSED]** and listed in §5 as a question. Nothing here sets business policy that D-06 (deposit/refund), D-07 (GST) or D-08 (rates) still own — those appear only as named, configurable conditions.
+This decision turns the state lists in FS §33 into explicit transitions: who may make each change, what must be true first, and what happens as a result. Where §33 was silent or ambiguous, the addition is marked **[PROPOSED]** and was put to the Product Owner as a question in §5; all were **approved as drafted** on 20 October 2026, so every [PROPOSED] item and every draft position in §5 is now part of the decision. Nothing here sets business policy that D-06 (deposit/refund), D-07 (GST) or D-08 (rates) still own — those appear only as named, configurable conditions.
 
 ---
 
@@ -239,7 +239,7 @@ Derived, not set by hand: the count of distinct circuit temples with a COMPLETED
 
 ---
 
-## 5. Questions for the Product Owner
+## 5. Questions for the Product Owner — all approved as drafted (20 Oct 2026)
 
 | #   | Question                                                                                                | Draft position                                                                        |
 | --- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -256,4 +256,4 @@ Derived, not set by hand: the count of distinct circuit temples with a COMPLETED
 | Q11 | Add ChangeRequest WITHDRAWN and Cancellation CLOSED_NO_REFUND?                                          | Yes                                                                                   |
 | Q12 | Is the Passport per traveller across all their trips, or per trip?                                      | Per traveller per circuit, across trips (a pilgrim who did 6/9 last year continues)   |
 
-Once these are answered, the approved version becomes the source for the `packages/domain` state machine code and its tests, and the API contracts in FS §15/§32 are locked against it.
+This approved version is the source for the `packages/domain` state machine code and its tests, and the API contracts in FS §15/§32 are locked against it. Changing it needs a new Product Owner decision.

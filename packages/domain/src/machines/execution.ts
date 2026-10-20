@@ -35,7 +35,7 @@ export const tripMachine = defineMachine({
       from: ['STARTED'],
       to: 'IN_PROGRESS',
       by: ['SYSTEM'],
-      note: 'D-04 Q7 [PROPOSED]: first temple ARRIVED.',
+      note: 'D-04 Q7: first temple ARRIVED.',
     },
     {
       from: ['STARTED', 'IN_PROGRESS'],
@@ -48,7 +48,7 @@ export const tripMachine = defineMachine({
       to: 'IN_PROGRESS',
       by: ['OPS_MANAGER'],
       requiresReason: true,
-      note: 'D-04 Q8 [PROPOSED]: operational clearance recorded.',
+      note: 'D-04 Q8: operational clearance recorded.',
     },
     {
       from: ['IN_PROGRESS', 'INCIDENT'],
@@ -90,7 +90,7 @@ export const templeVisitMachine = defineMachine({
       to: 'COMPLETED',
       by: OPS,
       requiresReason: true,
-      note: 'D-04 Q9 [PROPOSED]: coordinator recording after a phone call (D-15 fallback).',
+      note: 'D-04 Q9: coordinator recording after a phone call (D-15 fallback).',
     },
     {
       from: ['PLANNED', 'ARRIVED', 'VISITING'],
@@ -127,7 +127,7 @@ export const changeRequestMachine = defineMachine({
       from: ['REQUESTED', 'REVIEWING'],
       to: 'WITHDRAWN',
       by: ['CUSTOMER', ...OPS],
-      note: 'D-04 Q11 [PROPOSED].',
+      note: 'D-04 Q11.',
     },
   ],
 });
@@ -160,7 +160,7 @@ export const cancellationMachine = defineMachine({
       from: ['APPROVED'],
       to: 'CLOSED_NO_REFUND',
       by: ['SYSTEM'],
-      note: 'D-04 Q11 [PROPOSED]: refund amount is zero under policy.',
+      note: 'D-04 Q11: refund amount is zero under policy.',
     },
   ],
 });

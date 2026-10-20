@@ -18,7 +18,7 @@ export interface PassportProgress {
 
 /**
  * @param circuitTempleIds the circuit's eligible temples (9 for Navagraha)
- * @param visits all of the traveller's visits for this circuit, across trips (D-04 Q12 [PROPOSED])
+ * @param visits all of the traveller's visits for this circuit, across trips (D-04 Q12)
  */
 export function derivePassport(
   circuitTempleIds: readonly string[],

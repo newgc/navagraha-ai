@@ -28,7 +28,7 @@ export const bookingMachine = defineMachine({
       to: 'PENDING_CONFIRMATION',
       by: ['SYSTEM', 'OPS_MANAGER'],
       requiresReason: true,
-      note: 'D-04 Q2 [PROPOSED]: gate no longer holds (EC-08, applied change request).',
+      note: 'D-04 Q2: gate no longer holds (EC-08, applied change request).',
     },
     { from: ['CONFIRMED'], to: 'IN_PROGRESS', by: ['SYSTEM'], note: 'Trip STARTED.' },
     { from: ['IN_PROGRESS'], to: 'COMPLETED', by: ['SYSTEM'], note: 'Trip COMPLETED.' },
@@ -61,7 +61,7 @@ export const paymentMachine = defineMachine({
       from: ['FAILED'],
       to: 'SUCCESS',
       by: ['PAYMENT_GATEWAY', 'SYSTEM'],
-      note: 'D-04 Q4 [PROPOSED]: late capture, e.g. UPI pending (EC-25).',
+      note: 'D-04 Q4: late capture, e.g. UPI pending (EC-25).',
     },
     {
       from: ['SUCCESS', 'PARTIALLY_REFUNDED'],
@@ -89,7 +89,7 @@ export const refundMachine = defineMachine({
   ],
 });
 
-/** D-04 §2.3 [PROPOSED] — one per vehicle / hotel / pooja / pickup. The aggregate is derived. */
+/** D-04 §2.3 — one per vehicle / hotel / pooja / pickup. The aggregate is derived. */
 export const fulfilmentComponentMachine = defineMachine({
   name: 'FulfilmentComponent',
   states: ['PENDING', 'REQUESTED', 'CONFIRMED', 'DECLINED', 'RELEASED', 'CANCELLED'],

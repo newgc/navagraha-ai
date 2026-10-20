@@ -19,7 +19,7 @@ export const leadMachine = defineMachine({
     { from: ['PLANNING'], to: 'QUOTED', by: ['SYSTEM'] },
     { from: ['QUOTED'], to: 'CONVERTED', by: ['SYSTEM'] },
     { from: ANY_OPEN, to: 'LOST', by: ['SYSTEM', ...OPS], requiresReason: true },
-    { from: ['LOST'], to: 'PLANNING', by: ['SYSTEM', ...OPS], note: '[PROPOSED] lead returns.' },
+    { from: ['LOST'], to: 'PLANNING', by: ['SYSTEM', ...OPS], note: 'lead returns.' },
   ],
 });
 
@@ -46,7 +46,7 @@ export const planningSessionMachine = defineMachine({
       from: ['PLAN_GENERATED'],
       to: 'COLLECTING',
       by: ['SYSTEM'],
-      note: '[PROPOSED] customer changed a material input.',
+      note: 'customer changed a material input.',
     },
     { from: ANY_OPEN, to: 'EXPIRED', by: ['SYSTEM'] },
     { from: ANY_OPEN, to: 'CANCELLED', by: ['CUSTOMER', 'SYSTEM'] },
@@ -88,6 +88,6 @@ export const itineraryMachine = defineMachine({
     { from: ['ACCEPTED', 'OPS_ADJUSTED'], to: 'LIVE', by: ['SYSTEM'] },
     { from: ['LIVE'], to: 'COMPLETED', by: ['SYSTEM'] },
     { from: ANY_OPEN, to: 'ABANDONED', by: ['SYSTEM'] },
-    { from: ANY_OPEN, to: 'SUPERSEDED', by: ['SYSTEM'], note: 'D-04 Q6 [PROPOSED].' },
+    { from: ANY_OPEN, to: 'SUPERSEDED', by: ['SYSTEM'], note: 'D-04 Q6.' },
   ],
 });
