@@ -63,6 +63,23 @@ pnpm db:grant-role --phone 98765 43210 --role OPS_MANAGER --actor "Your name"
 pnpm db:grant-role --phone 98765 43210 --role OPS_MANAGER --actor "Your name" --revoke
 ```
 
+## Operations console
+
+`apps/web` has the console for coordinators, managers and finance at `/ops` (sign in at
+`/sign-in`). It lists bookings, creates concierge bookings, and runs supplier and payment
+actions. The browser never holds the API token: sign-in sets an httpOnly cookie and pages call
+the API from the server (`apps/web/lib/api.ts`). Set `API_URL` for the web app (default
+`http://localhost:4000`).
+
+Browser tests drive the console in Chromium against the real API and a throwaway database:
+
+```sh
+pnpm build
+E2E_DATABASE_URL=postgres://navagraha:navagraha@localhost:5432/navagraha_e2e pnpm --filter @navagraha/web e2e
+```
+
+Add `E2E_SCREENSHOTS=<dir>` to save screenshots of the key screens.
+
 ## Concierge (manual) bookings
 
 Operations staff create bookings taken by phone or WhatsApp (FS §12.1). All routes need an

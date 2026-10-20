@@ -22,6 +22,21 @@ describe('loadConfig', () => {
     );
   });
 
+  it('the file sender needs an outbox and is refused in production', () => {
+    expect(() => loadConfig({ ...base, OTP_SENDER: 'file' })).toThrow(/OTP_OUTBOX_FILE/);
+    expect(
+      loadConfig({ ...base, OTP_SENDER: 'file', OTP_OUTBOX_FILE: '/tmp/otp' }).OTP_SENDER,
+    ).toBe('file');
+    expect(() =>
+      loadConfig({
+        ...base,
+        NODE_ENV: 'production',
+        OTP_SENDER: 'file',
+        OTP_OUTBOX_FILE: '/tmp/otp',
+      }),
+    ).toThrow(/OTP_SENDER/);
+  });
+
   it('refuses the console OTP sender and the example secret in production', () => {
     const prod = {
       ...base,

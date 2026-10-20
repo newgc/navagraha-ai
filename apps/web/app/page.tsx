@@ -13,6 +13,9 @@ export default function Home() {
       <Link className="cta" href="/plan">
         Plan My Pilgrimage
       </Link>
+      <p className="small">
+        <Link href="/sign-in">Staff sign in</Link>
+      </p>
     </main>
   );
 }

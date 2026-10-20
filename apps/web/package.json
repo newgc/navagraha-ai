@@ -2,22 +2,28 @@
   "name": "@navagraha/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Customer web app / PWA (FS §2.2).",
+  "description": "Customer web app / PWA (FS \u00a72.2).",
   "type": "module",
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"web: no tests yet\""
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "dependencies": {
+    "@navagraha/domain": "workspace:*",
     "next": "^16.4.2",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@navagraha/db": "workspace:*",
+    "@playwright/test": "^1.64.1",
     "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0"
+    "@types/react-dom": "^19.2.0",
+    "vitest": "^5.0.5"
   }
 }

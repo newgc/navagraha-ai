@@ -1,8 +1,7 @@
 import 'reflect-metadata';
-import { createDb, migrateDatabase, seedDatabase } from '@navagraha/db';
+import { createDb, resetDatabase, seedDatabase } from '@navagraha/db';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { sql } from 'drizzle-orm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import { OTP_SENDER, type OtpSender } from '../src/auth/otp-sender.js';
@@ -26,10 +25,7 @@ export class CapturingOtpSender implements OtpSender {
 /** A fully wired app on a freshly migrated and seeded database. */
 export async function createTestApp(url: string) {
   const { db, pool } = createDb(url);
-  await db.execute(sql`DROP SCHEMA IF EXISTS public CASCADE`);
-  await db.execute(sql`DROP SCHEMA IF EXISTS drizzle CASCADE`);
-  await db.execute(sql`CREATE SCHEMA public`);
-  await migrateDatabase(db);
+  await resetDatabase(db);
   await seedDatabase(db);
 
   const config: AppConfig = {

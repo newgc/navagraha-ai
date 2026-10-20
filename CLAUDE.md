@@ -33,7 +33,11 @@ Product Owner decisions in `docs/decisions/` override the FS.
 - Every route requires a signed-in user unless marked `@Public()`; restrict with `@Roles(...)`.
   Validate request bodies with zod via `parseBody`. Record sensitive mutations with
   `AuditService`. Never put OTP codes, tokens or full phone numbers in logs (use `maskPhone`).
-- Tests: Vitest. DB/API suites need `TEST_DATABASE_URL` and wipe that database.
+- Tests: Vitest. DB/API suites need `TEST_DATABASE_URL` and wipe that database. Browser tests
+  (`apps/web/e2e`, Playwright) need `E2E_DATABASE_URL` and built apps; locally set
+  `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium` if Playwright's own browser isn't installed.
+- Web: the API token stays in an httpOnly cookie; only server code (`lib/api.ts`, server
+  actions) calls the API. `@navagraha/db` must not be imported by app code (only e2e setup).
 - Schema changes: edit `packages/db/src/schema`, run `pnpm db:generate`, commit the migration.
 - Reference spec IDs (NAV-_, MR-_, EC-_, D-_) in code comments and commit messages where they
   explain why.

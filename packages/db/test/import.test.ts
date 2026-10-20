@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { eq } from 'drizzle-orm';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { importTempleWorkbook, schema, type Database } from '../src/index.js';
+import { importTempleWorkbook } from '../src/import/index.js';
+import { schema, type Database } from '../src/index.js';
 import { freshDatabase } from './reset.js';
 
 const url = process.env.TEST_DATABASE_URL;

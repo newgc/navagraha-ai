@@ -50,3 +50,43 @@ jobs:
           test -z "$(git status --porcelain packages/db/drizzle)"
       - name: Test
         run: pnpm test
+
+  e2e:
+    name: Browser tests (operations console)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: navagraha
+          POSTGRES_PASSWORD: navagraha
+          POSTGRES_DB: navagraha_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U navagraha"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      E2E_DATABASE_URL: postgres://navagraha:navagraha@localhost:5432/navagraha_e2e
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Install Chromium
+        run: pnpm --filter @navagraha/web exec playwright install --with-deps chromium
+      - name: Browser tests
+        run: pnpm --filter @navagraha/web e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: apps/web/test-results
+          retention-days: 7
