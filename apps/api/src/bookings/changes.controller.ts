@@ -10,6 +10,7 @@ import {
 } from './booking.schemas.js';
 import { BookingsService } from './bookings.service.js';
 import { CancellationsService } from './cancellations.service.js';
+import { GatewayRefundsService } from './gateway-refunds.service.js';
 import { ChangesService } from './changes.service.js';
 import { UUID, valid } from './ids.js';
 
@@ -157,7 +158,39 @@ export class RefundsController {
   constructor(
     @Inject(CancellationsService) private readonly cancellations: CancellationsService,
     @Inject(BookingsService) private readonly bookings: BookingsService,
+    @Inject(GatewayRefundsService) private readonly gatewayRefunds: GatewayRefundsService,
   ) {}
+
+  /** D-11 — a different Finance / manager user approves a gateway refund; it is then sent. */
+  @Post(':id/approve')
+  @HttpCode(200)
+  async approve(
+    @Param('id') id: string,
+    @CurrentAuth() auth: AuthContext,
+    @Req() req: AuthedRequest,
+  ) {
+    const refundId = valid(id, UUID, 'refund id');
+    await this.gatewayRefunds.approve(refundId, auth, req.correlationId);
+    return this.bookings.detail(await this.gatewayRefunds.bookingOf(refundId));
+  }
+
+  /** Sends an approved gateway refund again after the gateway could not be reached. */
+  @Post(':id/send')
+  @HttpCode(200)
+  async send(@Param('id') id: string, @CurrentAuth() auth: AuthContext, @Req() req: AuthedRequest) {
+    const refundId = valid(id, UUID, 'refund id');
+    await this.gatewayRefunds.send(refundId, auth.userId, req.correlationId);
+    return this.bookings.detail(await this.gatewayRefunds.bookingOf(refundId));
+  }
+
+  /** MR-19 — read the refund from the gateway now. */
+  @Post(':id/check')
+  @HttpCode(200)
+  async check(@Param('id') id: string, @Req() req: AuthedRequest) {
+    const refundId = valid(id, UUID, 'refund id');
+    await this.gatewayRefunds.reconcile(refundId, req.correlationId);
+    return this.bookings.detail(await this.gatewayRefunds.bookingOf(refundId));
+  }
 
   /** D-19 extension step 2 — a different Finance / manager user confirms the refund. */
   @Post(':id/confirm')

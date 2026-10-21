@@ -15,6 +15,7 @@ import {
   RefundsController,
 } from './changes.controller.js';
 import { ChangesService } from './changes.service.js';
+import { GatewayRefundsService } from './gateway-refunds.service.js';
 import { PaymentLinksService } from './payment-links.service.js';
 import { gatewayProvider } from '../payments/gateway.js';
 
@@ -35,6 +36,7 @@ import { gatewayProvider } from '../payments/gateway.js';
     CancellationsService,
     TransitionService,
     PaymentLinksService,
+    GatewayRefundsService,
     gatewayProvider,
   ],
 })

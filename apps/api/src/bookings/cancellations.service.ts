@@ -363,10 +363,12 @@ export class CancellationsService {
 
   /** Step 2: a different Finance / manager user confirms the money went back. */
   async confirmRefund(refundId: string, auth: AuthContext, correlationId: string) {
-    const sys = systemActor(auth.userId);
     return this.db.transaction(async (tx) => {
       const r = await this.loadRefund(tx, refundId);
-      const b = await this.core.lockBooking(tx, r.bookingId);
+      if (r.method === 'GATEWAY') {
+        throw new ConflictException('Refunds through the gateway are confirmed by the gateway');
+      }
+      await this.core.lockBooking(tx, r.bookingId);
       const check = checkOfflineConfirmation({
         recordedByUserId: r.initiatedByUserId!,
         confirmerUserId: auth.userId,
@@ -387,82 +389,106 @@ export class CancellationsService {
             : 'Only Finance or an Operations Manager can confirm refunds',
         );
       }
-      await this.transitions.move(tx, refundMachine, r.id, 'INITIATED', 'CONFIRMED', sys, {
+      await this.settleRefund(tx, r, systemActor(auth.userId), {
         correlationId,
         reason: 'Refund confirmed by a second person (D-19)',
+        confirmedByUserId: auth.userId,
       });
+      return r.bookingId;
+    });
+  }
 
-      const ps = (
+  /**
+   * Money is back with the customer: the refund is CONFIRMED, the payments it came from are
+   * marked (partially) refunded, and the cancellation closes or the gate is re-checked.
+   * Offline refunds are split newest payment first; a gateway refund comes from its payment.
+   */
+  async settleRefund(
+    tx: Tx,
+    r: typeof refund.$inferSelect,
+    actor: Actor,
+    opts: { correlationId: string; reason: string; confirmedByUserId: string | null },
+  ) {
+    const { correlationId } = opts;
+    await this.transitions.move(tx, refundMachine, r.id, 'INITIATED', 'CONFIRMED', actor, {
+      correlationId,
+      reason: opts.reason,
+    });
+
+    const ps = (
+      await tx
+        .select()
+        .from(payment)
+        .where(eq(payment.bookingId, r.bookingId))
+        .orderBy(asc(payment.createdAt))
+    ).filter((p) => p.state === 'SUCCESS' || p.state === 'PARTIALLY_REFUNDED');
+    let allocations: { paymentId: string; paise: number }[];
+    try {
+      allocations = r.paymentId
+        ? allocateRefund(
+            ps.filter((p) => p.id === r.paymentId),
+            r.amountPaise,
+          )
+        : allocateRefund(ps, r.amountPaise);
+    } catch (e) {
+      throw new ConflictException((e as Error).message);
+    }
+    for (const a of allocations) {
+      const p = ps.find((x) => x.id === a.paymentId)!;
+      const refunded = p.refundedPaise + a.paise;
+      const to = refunded === p.capturedPaise ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+      await this.transitions.move(tx, paymentMachine, p.id, p.state, to, actor, {
+        correlationId,
+        reason: `Refund of ${formatPaise(a.paise)} confirmed`,
+      });
+      await tx.update(payment).set({ refundedPaise: refunded }).where(eq(payment.id, p.id));
+    }
+    await tx
+      .update(refund)
+      .set({ confirmedByUserId: opts.confirmedByUserId, confirmedAt: new Date(), allocations })
+      .where(eq(refund.id, r.id));
+
+    if (r.cancellationId) {
+      const [c] = await tx.select().from(cancellation).where(eq(cancellation.id, r.cancellationId));
+      const confirmed = (
         await tx
           .select()
-          .from(payment)
-          .where(eq(payment.bookingId, b.id))
-          .orderBy(asc(payment.createdAt))
-      ).filter((p) => p.state === 'SUCCESS' || p.state === 'PARTIALLY_REFUNDED');
-      let allocations: { paymentId: string; paise: number }[];
-      try {
-        allocations = allocateRefund(ps, r.amountPaise);
-      } catch (e) {
-        throw new ConflictException((e as Error).message);
+          .from(refund)
+          .where(and(eq(refund.cancellationId, r.cancellationId), eq(refund.state, 'CONFIRMED')))
+      ).reduce((s, x) => s + x.amountPaise, 0);
+      if (c?.state === 'REFUND_PENDING' && confirmed >= (c.refundPaise ?? 0)) {
+        await this.transitions.move(
+          tx,
+          cancellationMachine,
+          c.id,
+          'REFUND_PENDING',
+          'REFUNDED',
+          systemActor(actor.userId),
+          { correlationId, reason: 'Full refund paid' },
+        );
       }
-      for (const a of allocations) {
-        const p = ps.find((x) => x.id === a.paymentId)!;
-        const refunded = p.refundedPaise + a.paise;
-        const to = refunded === p.capturedPaise ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
-        await this.transitions.move(tx, paymentMachine, p.id, p.state, to, sys, {
-          correlationId,
-          reason: `Refund of ${formatPaise(a.paise)} confirmed`,
-        });
-        await tx.update(payment).set({ refundedPaise: refunded }).where(eq(payment.id, p.id));
-      }
-      await tx
-        .update(refund)
-        .set({ confirmedByUserId: auth.userId, confirmedAt: new Date(), allocations })
-        .where(eq(refund.id, r.id));
-
-      if (r.cancellationId) {
-        const [c] = await tx
-          .select()
-          .from(cancellation)
-          .where(eq(cancellation.id, r.cancellationId));
-        const confirmed = (
-          await tx
-            .select()
-            .from(refund)
-            .where(and(eq(refund.cancellationId, r.cancellationId), eq(refund.state, 'CONFIRMED')))
-        ).reduce((s, x) => s + x.amountPaise, 0);
-        if (c?.state === 'REFUND_PENDING' && confirmed >= (c.refundPaise ?? 0)) {
-          await this.transitions.move(
-            tx,
-            cancellationMachine,
-            c.id,
-            'REFUND_PENDING',
-            'REFUNDED',
-            sys,
-            { correlationId, reason: 'Full refund paid' },
-          );
-        }
-      } else {
-        await this.core.reevaluate(tx, b.id, auth.userId, correlationId);
-      }
-      await this.audit.record(
-        {
-          action: 'refund.confirmed',
-          correlationId,
-          actorUserId: auth.userId,
-          entityType: 'refund',
-          entityId: r.id,
-          metadata: { bookingId: b.id, allocations },
-        },
-        tx,
-      );
-      return b.id;
-    });
+    } else {
+      await this.core.reevaluate(tx, r.bookingId, actor.userId, correlationId);
+    }
+    await this.audit.record(
+      {
+        action: 'refund.confirmed',
+        correlationId,
+        actorUserId: opts.confirmedByUserId,
+        entityType: 'refund',
+        entityId: r.id,
+        metadata: { bookingId: r.bookingId, allocations, method: r.method },
+      },
+      tx,
+    );
   }
 
   async rejectRefund(refundId: string, reason: string, auth: AuthContext, correlationId: string) {
     return this.db.transaction(async (tx) => {
       const r = await this.loadRefund(tx, refundId);
+      if (r.method === 'GATEWAY' && (r.sentAt || r.gatewayStatus)) {
+        throw new ConflictException('This refund was already sent to the gateway');
+      }
       await this.core.lockBooking(tx, r.bookingId);
       await this.transitions.move(
         tx,
@@ -501,7 +527,7 @@ export class CancellationsService {
     return c;
   }
 
-  private async loadRefund(tx: Tx, id: string) {
+  async loadRefund(tx: Tx, id: string) {
     const [r] = await tx.select().from(refund).where(eq(refund.id, id));
     if (!r) throw new NotFoundException('Refund not found');
     return r;

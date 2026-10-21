@@ -5,7 +5,7 @@ import {
   MODES,
   OFFLINE_PAYMENT_METHODS,
   QUOTE_LINE_KINDS,
-  REFUND_METHODS,
+  OFFLINE_REFUND_METHODS,
   SOURCE_CHANNELS,
   TEMPLATES,
 } from '@navagraha/domain';
@@ -149,6 +149,12 @@ export const OfflinePaymentInput = z.object({
 export const ReasonInput = z.object({ reason: text(1000) });
 
 /** D-11 payment link; without an amount the link is for the whole balance still due. */
+/** D-11 — a refund through the gateway, approved by a second person before it is sent. */
+export const GatewayRefundInput = z.object({
+  amountPaise: z.number().int().positive().max(1_00_00_000_00),
+  reason: text(1000),
+});
+
 export const PaymentLinkInput = z.object({
   amountPaise: z.number().int().positive().max(1_00_00_000_00).optional(),
 });
@@ -211,7 +217,7 @@ export const CancellationReviewInput = z.object({
 });
 
 export const RefundInput = z.object({
-  method: z.enum(REFUND_METHODS),
+  method: z.enum(OFFLINE_REFUND_METHODS),
   amountPaise: z.number().int().positive().max(1_00_00_000_00),
   reference: text(200),
   paidOn: isoDate,

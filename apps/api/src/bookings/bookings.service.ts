@@ -497,6 +497,28 @@ export class BookingsService {
       refunds: {
         /** How much more may be recorded as refunded right now. */
         duePaise: Math.max(0, room.limit),
+        /** D-11: the most one refund through the gateway can return (one online payment). */
+        gatewayRefundablePaise:
+          this.config.PAYMENT_GATEWAY === 'none'
+            ? 0
+            : Math.max(
+                0,
+                ...payments
+                  .filter(
+                    (p) =>
+                      p.method === 'GATEWAY' &&
+                      p.gatewayOrderId &&
+                      (p.state === 'SUCCESS' || p.state === 'PARTIALLY_REFUNDED'),
+                  )
+                  .map(
+                    (p) =>
+                      p.capturedPaise -
+                      p.refundedPaise -
+                      refunds
+                        .filter((r) => r.paymentId === p.id && r.state === 'INITIATED')
+                        .reduce((sum, r) => sum + r.amountPaise, 0),
+                  ),
+              ),
         items: refunds.map((r) => ({
           id: r.id,
           state: r.state,
@@ -508,6 +530,17 @@ export class BookingsService {
           confirmedBy: r.confirmedByUserId,
           forCancellation: !!r.cancellationId,
           reason: r.reason,
+          gateway:
+            r.method === 'GATEWAY'
+              ? {
+                  paymentId: r.paymentId,
+                  approvedBy: r.approvedByUserId,
+                  approvedAt: r.approvedAt,
+                  sentAt: r.sentAt,
+                  status: r.gatewayStatus,
+                  refundId: r.gatewayRefundId,
+                }
+              : null,
         })),
       },
       history: history.map((h) => ({

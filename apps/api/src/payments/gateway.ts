@@ -9,6 +9,9 @@ export interface PaymentGateway {
   /** Captured payments made through the link, read from the gateway's own records. */
   successfulPayments(linkId: string): Promise<GatewayCapture[]>;
   cancelLink(linkId: string): Promise<GatewayLink>;
+  /** Sends money back for one captured order; safe to retry with the same refund id. */
+  createRefund(input: CreateRefundInput): Promise<GatewayRefund>;
+  getRefund(orderId: string, refundId: string): Promise<GatewayRefund>;
   /** True when a webhook really comes from the gateway (signature over the raw body). */
   verifyWebhook(rawBody: Buffer, headers: Record<string, string | undefined>): boolean;
 }
@@ -20,6 +23,25 @@ export interface CreateLinkInput {
   customer: { phone: string; name?: string | null };
   expiresAt: Date;
   returnUrl?: string;
+}
+
+export interface CreateRefundInput {
+  orderId: string;
+  /** Ours; 3–40 alphanumeric characters at Cashfree. */
+  refundId: string;
+  amountPaise: number;
+  note: string;
+}
+
+/** SUCCESS and the two failure states are final; anything else is still in progress. */
+export type RefundStatus =
+  'SUCCESS' | 'PENDING' | 'PENDING_APPROVAL' | 'ONHOLD' | 'CANCELLED' | 'REJECTED';
+
+export interface GatewayRefund {
+  refundId: string;
+  status: RefundStatus | string;
+  gatewayRefundId: string | null;
+  raw: unknown;
 }
 
 export type LinkStatus = 'ACTIVE' | 'PAID' | 'PARTIALLY_PAID' | 'EXPIRED' | 'CANCELLED';
@@ -156,6 +178,43 @@ export class CashfreeGateway implements PaymentGateway {
       }
     }
     return captures;
+  }
+
+  async createRefund(input: CreateRefundInput): Promise<GatewayRefund> {
+    // Sandbox simulates the outcome from the note (Cashfree docs); live refunds carry ours.
+    const note =
+      this.options.env === 'sandbox' ? 'SUCCESS' : input.note.replace(/\s+/g, ' ').slice(0, 100);
+    const refund = await this.call(
+      'POST',
+      `/orders/${encodeURIComponent(input.orderId)}/refunds`,
+      {
+        refund_id: input.refundId,
+        refund_amount: toRupees(input.amountPaise),
+        refund_note: note.length >= 3 ? note : 'Refund',
+        refund_speed: 'STANDARD',
+      },
+      input.refundId,
+    );
+    return this.refund(refund);
+  }
+
+  async getRefund(orderId: string, refundId: string) {
+    return this.refund(
+      await this.call(
+        'GET',
+        `/orders/${encodeURIComponent(orderId)}/refunds/${encodeURIComponent(refundId)}`,
+      ),
+    );
+  }
+
+  private refund(raw: unknown): GatewayRefund {
+    const r = raw as Record<string, unknown>;
+    return {
+      refundId: String(r.refund_id),
+      status: String(r.refund_status ?? ''),
+      gatewayRefundId: r.cf_refund_id == null ? null : String(r.cf_refund_id),
+      raw,
+    };
   }
 
   verifyWebhook(rawBody: Buffer, headers: Record<string, string | undefined>) {

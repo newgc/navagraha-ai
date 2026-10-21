@@ -20,6 +20,7 @@ import {
   FulfilmentConfirmInput,
   FulfilmentInput,
   FulfilmentRequestInput,
+  GatewayRefundInput,
   CancellationInput,
   ChangeRequestInput,
   ManualBookingInput,
@@ -31,6 +32,7 @@ import {
 import { BookingsService } from './bookings.service.js';
 import { CancellationsService } from './cancellations.service.js';
 import { ChangesService } from './changes.service.js';
+import { GatewayRefundsService } from './gateway-refunds.service.js';
 import { PaymentLinksService } from './payment-links.service.js';
 import { REFERENCE, UUID, valid } from './ids.js';
 
@@ -40,6 +42,7 @@ export class BookingsController {
   constructor(
     @Inject(BookingsService) private readonly bookings: BookingsService,
     @Inject(PaymentLinksService) private readonly links: PaymentLinksService,
+    @Inject(GatewayRefundsService) private readonly gatewayRefunds: GatewayRefundsService,
     @Inject(ChangesService) private readonly changes: ChangesService,
     @Inject(CancellationsService) private readonly cancellations: CancellationsService,
   ) {}
@@ -71,6 +74,25 @@ export class BookingsController {
     await this.cancellations.request(
       id,
       parseBody(CancellationInput, body),
+      auth,
+      req.correlationId,
+    );
+    return this.bookings.detail(id);
+  }
+
+  /** D-11 — ask for a refund to the customer's online payment; a second person approves it. */
+  @Post(':reference/refunds/gateway')
+  @Roles('FINANCE', 'OPS_MANAGER')
+  async gatewayRefund(
+    @Param('reference') reference: string,
+    @Body() body: unknown,
+    @CurrentAuth() auth: AuthContext,
+    @Req() req: AuthedRequest,
+  ) {
+    const id = await this.bookings.idByReference(valid(reference, REFERENCE, 'booking reference'));
+    await this.gatewayRefunds.request(
+      id,
+      parseBody(GatewayRefundInput, body),
       auth,
       req.correlationId,
     );

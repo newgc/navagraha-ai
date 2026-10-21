@@ -37,14 +37,29 @@
 - Staging uses Cashfree's **sandbox** only; the API refuses production keys anywhere but the
   production deployment, and sandbox keys there.
 
+## Refunds through Cashfree (added 21 October 2026)
+
+1. Finance or a manager asks for a refund on the booking (amount within what is due to be
+   refunded). It is tied to one online payment — the newest that can take it — and holds
+   that amount. Nothing is sent.
+2. A **different** Finance / manager user approves it (D-19 extension; the database refuses
+   the same person). Only then is it sent: `POST /pg/orders/{order_id}/refunds`, with our
+   refund id as the idempotency key so "Send again" after a network error cannot refund
+   twice. A gateway refusal (4xx) fails the refund and frees the amount.
+3. Cashfree's record decides the outcome: its refund webhook, the 10-minute check or **Check
+   refund status** read the refund; `SUCCESS` → CONFIRMED by the `PAYMENT_GATEWAY` actor and
+   the payment (partially) refunded and the cancellation closed exactly as for an offline
+   refund; `CANCELLED` / `REJECTED` → FAILED.
+
+Refunds paid outside Cashfree (UPI, bank, cash) are still recorded and confirmed by two
+people as before. In the sandbox the refund note is `SUCCESS` so Cashfree simulates a paid
+refund (Cashfree docs); live refunds carry the reason.
+
 ## Open
 
 - **Link validity** is a setting (`PAYMENT_LINK_EXPIRY_HOURS`, 48 hours) until payment timing
   is decided with D-06 (FS §31: "payment timing unspecified").
 - **Deposit or full payment** stays D-06; links default to the whole balance due.
-- **Refunds through Cashfree** are not automated yet: refund in the Cashfree dashboard, then
-  record it on the booking as today (two people, D-19 extension). Automating it
-  (`POST /pg/orders/{order_id}/refunds`) is the next step.
 - Cashfree's payment-link webhook format is unclear in its docs; we rely on the standard
   signed payment webhooks (which carry the link id in `order_tags`) plus reconciliation.
   Confirm in the sandbox that payment webhooks arrive for link payments.

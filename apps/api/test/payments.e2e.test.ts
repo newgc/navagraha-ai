@@ -6,7 +6,10 @@ import type { WhatsAppMessenger } from '../src/messaging/whatsapp.js';
 import {
   CashfreeGateway,
   GATEWAY_WEBHOOK_TYPE,
+  GatewayError,
   type CreateLinkInput,
+  type CreateRefundInput,
+  type GatewayRefund,
   type GatewayCapture,
   type GatewayLink,
   type PaymentGateway,
@@ -22,7 +25,11 @@ class FakeGateway implements PaymentGateway {
   readonly provider = 'cashfree' as const;
   readonly links = new Map<string, GatewayLink & { input: CreateLinkInput }>();
   readonly captures = new Map<string, GatewayCapture[]>();
+  readonly refunds = new Map<string, GatewayRefund & { input: CreateRefundInput }>();
   failNextCreate = false;
+  /** What the gateway answers when a refund is sent; changed by tests. */
+  refundStatusOnCreate = 'PENDING';
+  refuseNextRefund = false;
   private readonly signer = new CashfreeGateway({
     env: 'sandbox',
     clientId: 'id',
@@ -57,6 +64,29 @@ class FakeGateway implements PaymentGateway {
     link.status = 'CANCELLED';
     return link;
   }
+  async createRefund(input: CreateRefundInput) {
+    if (this.refuseNextRefund) {
+      this.refuseNextRefund = false;
+      throw new GatewayError(
+        'Cashfree POST /orders/x/refunds failed (HTTP 400: amount too large)',
+        400,
+      );
+    }
+    const existing = this.refunds.get(input.refundId);
+    if (existing) return existing;
+    const r = {
+      refundId: input.refundId,
+      status: this.refundStatusOnCreate,
+      gatewayRefundId: `cf_ref_${this.refunds.size + 1}`,
+      raw: { refund_id: input.refundId },
+      input,
+    };
+    this.refunds.set(input.refundId, r);
+    return r;
+  }
+  async getRefund(_orderId: string, refundId: string) {
+    return this.refunds.get(refundId)!;
+  }
   verifyWebhook(rawBody: Buffer, headers: Record<string, string | undefined>) {
     return this.signer.verifyWebhook(rawBody, headers);
   }
@@ -80,6 +110,8 @@ describe.skipIf(!url)('payment links through the gateway (D-11, MR-19, EC-25)', 
   let ctx: Awaited<ReturnType<typeof createTestApp>>;
   let coordinator: Awaited<ReturnType<typeof signInAs>>;
   let customer: Awaited<ReturnType<typeof signInAs>>;
+  let manager: Awaited<ReturnType<typeof signInAs>>;
+  let finance: Awaited<ReturnType<typeof signInAs>>;
   const gateway = new FakeGateway();
   const sent: { phone: string; text: string }[] = [];
   const whatsapp: WhatsAppMessenger = {
@@ -95,6 +127,8 @@ describe.skipIf(!url)('payment links through the gateway (D-11, MR-19, EC-25)', 
     );
     coordinator = await signInAs(ctx, ['OPS_COORDINATOR']);
     customer = await signInAs(ctx, ['CUSTOMER']);
+    manager = await signInAs(ctx, ['OPS_MANAGER']);
+    finance = await signInAs(ctx, ['FINANCE']);
   });
   afterAll(async () => ctx?.close());
 
@@ -265,5 +299,147 @@ describe.skipIf(!url)('payment links through the gateway (D-11, MR-19, EC-25)', 
     const b = await newBooking();
     await sendLink(b.reference, { amountPaise: 649501 }).expect(422);
     await sendLink(b.reference, { amountPaise: 0 }).expect(400);
+  });
+
+  describe('refunds through the gateway (D-11, D-19 extension)', () => {
+    const post = (who: { header: Record<string, string> }, path: string, body: object = {}) =>
+      http().post(path).set(who.header).send(body);
+
+    /** A booking paid in full by link, then cancelled with a refund approved by a manager. */
+    async function cancelledPaidBooking(refundPaise: number) {
+      const b = await newBooking();
+      const paymentId = (await sendLink(b.reference).expect(201)).body.linkDelivery.paymentId;
+      gateway.pay([...gateway.links.keys()].at(-1)!, 649500, `cf_pay_${b.reference}`);
+      await post(coordinator, `/v1/payments/${paymentId}/reconcile`).expect(200);
+      const asked = await post(coordinator, `/v1/bookings/${b.reference}/cancel-request`, {
+        reason: 'Family emergency',
+        requestedVia: 'PHONE',
+      }).expect(201);
+      const c = asked.body.cancellations[0];
+      await post(coordinator, `/v1/cancellations/${c.id}/review`, {
+        refundPaise,
+        refundNote: 'Full refund, more than 7 days before travel',
+      }).expect(200);
+      const done = await post(manager, `/v1/cancellations/${c.id}/approve`).expect(200);
+      expect(done.body.refunds).toMatchObject({
+        duePaise: refundPaise,
+        gatewayRefundablePaise: 649500,
+      });
+      return { b, paymentId };
+    }
+
+    it('needs a second person, then the gateway, before money counts as returned', async () => {
+      const { b, paymentId } = await cancelledPaidBooking(649500);
+      await post(coordinator, `/v1/bookings/${b.reference}/refunds/gateway`, {
+        amountPaise: 1000,
+        reason: 'x',
+      }).expect(403);
+      await post(finance, `/v1/bookings/${b.reference}/refunds/gateway`, {
+        amountPaise: 649501,
+        reason: 'Cancelled',
+      }).expect(422);
+      const asked = await post(finance, `/v1/bookings/${b.reference}/refunds/gateway`, {
+        amountPaise: 649500,
+        reason: 'Cancelled by the family',
+      }).expect(201);
+      const r = asked.body.refunds.items[0];
+      expect(r).toMatchObject({
+        state: 'INITIATED',
+        method: 'GATEWAY',
+        gateway: { paymentId, approvedBy: null, sentAt: null },
+      });
+      // The amount is held: nothing more can be asked for.
+      expect(asked.body.refunds).toMatchObject({ duePaise: 0, gatewayRefundablePaise: 0 });
+      expect(gateway.refunds.size).toBe(0);
+
+      // The person who asked cannot approve; a hand confirmation is not allowed either.
+      await post(finance, `/v1/refunds/${r.id}/approve`).expect(403);
+      await post(manager, `/v1/refunds/${r.id}/confirm`).expect(409);
+
+      const sent = await post(manager, `/v1/refunds/${r.id}/approve`).expect(200);
+      const item = sent.body.refunds.items[0];
+      expect(item).toMatchObject({
+        state: 'INITIATED',
+        gateway: { approvedBy: manager.userId, status: 'PENDING', sentAt: expect.any(String) },
+      });
+      const created = [...gateway.refunds.values()].at(-1)!;
+      expect(created.input).toMatchObject({
+        orderId: `CFPay_cf_pay_${b.reference}`,
+        refundId: item.gateway.refundId,
+        amountPaise: 649500,
+        note: 'Cancelled by the family',
+      });
+      // Already sent: cannot be approved again or rejected.
+      await post(manager, `/v1/refunds/${r.id}/approve`).expect(409);
+      await post(manager, `/v1/refunds/${r.id}/reject`, { reason: 'no' }).expect(409);
+
+      // The gateway finishes it; its refund webhook triggers the check.
+      created.status = 'SUCCESS';
+      await webhook(
+        { type: 'REFUND_STATUS_WEBHOOK', data: { refund: { refund_id: item.gateway.refundId } } },
+        SECRET,
+        `evt-refund-${r.id}`,
+      ).expect(200);
+      const done = await until(async () => {
+        const d = await detail(b.reference);
+        // Wait for the whole settlement (the page reads outside the settling transaction).
+        return d.refunds.items[0].state === 'CONFIRMED' && d.cancellations[0].state === 'REFUNDED'
+          ? d
+          : undefined;
+      });
+      expect(done.payment.items[0]).toMatchObject({ state: 'REFUNDED', refundedPaise: 649500 });
+      expect(done.cancellations[0].state).toBe('REFUNDED');
+      const steps = done.history
+        .filter((h: { machine: string }) => h.machine === 'Refund' || h.machine === 'Payment')
+        .map(
+          (h: { machine: string; to: string; actorRole: string }) =>
+            `${h.machine}:${h.to}:${h.actorRole}`,
+        );
+      expect(steps).toEqual(
+        expect.arrayContaining([
+          'Refund:INITIATED:FINANCE',
+          'Refund:CONFIRMED:PAYMENT_GATEWAY',
+          'Payment:REFUNDED:PAYMENT_GATEWAY',
+        ]),
+      );
+    });
+
+    it('a refund the gateway refuses fails and frees the amount; check status settles the rest', async () => {
+      const { b } = await cancelledPaidBooking(300000);
+      const ask = (amountPaise: number) =>
+        post(finance, `/v1/bookings/${b.reference}/refunds/gateway`, {
+          amountPaise,
+          reason: 'Partial refund',
+        }).expect(201);
+
+      const first = (await ask(300000)).body.refunds.items[0];
+      gateway.refuseNextRefund = true;
+      const refused = await post(manager, `/v1/refunds/${first.id}/approve`).expect(502);
+      expect(refused.body.message).toMatch(/amount too large/);
+      const after = await detail(b.reference);
+      expect(after.refunds.items[0]).toMatchObject({ state: 'FAILED' });
+      expect(after.refunds.duePaise).toBe(300000);
+
+      const second = (await ask(300000)).body.refunds.items.at(-1);
+      await post(manager, `/v1/refunds/${second.id}/approve`).expect(200);
+      const created = [...gateway.refunds.values()].at(-1)!;
+      await post(finance, `/v1/refunds/${second.id}/check`).expect(200);
+      expect((await detail(b.reference)).refunds.items.at(-1).state).toBe('INITIATED');
+      created.status = 'SUCCESS';
+      const checked = await post(finance, `/v1/refunds/${second.id}/check`).expect(200);
+      expect(checked.body.refunds.items.at(-1).state).toBe('CONFIRMED');
+      expect(checked.body.payment.items[0]).toMatchObject({
+        state: 'PARTIALLY_REFUNDED',
+        refundedPaise: 300000,
+      });
+    });
+
+    it('is refused without an online payment', async () => {
+      const b = await newBooking();
+      await post(finance, `/v1/bookings/${b.reference}/refunds/gateway`, {
+        amountPaise: 100,
+        reason: 'x',
+      }).expect(409);
+    });
   });
 });

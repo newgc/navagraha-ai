@@ -52,4 +52,6 @@ export type AcceptanceChannel = (typeof ACCEPTANCE_CHANNELS)[number];
 export const CHANGE_KINDS = ['DATE', 'TRAVELLERS', 'ITINERARY', 'PRICE', 'OTHER'] as const;
 export type ChangeKind = (typeof CHANGE_KINDS)[number];
 
-export const REFUND_METHODS = ['OFFLINE_UPI', 'OFFLINE_BANK_TRANSFER', 'CASH'] as const;
+export const REFUND_METHODS = ['OFFLINE_UPI', 'OFFLINE_BANK_TRANSFER', 'CASH', 'GATEWAY'] as const;
+/** Refunds paid outside the gateway and recorded by hand (D-19 extension). */
+export const OFFLINE_REFUND_METHODS = ['OFFLINE_UPI', 'OFFLINE_BANK_TRANSFER', 'CASH'] as const;

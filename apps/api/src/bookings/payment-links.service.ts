@@ -22,6 +22,7 @@ import { WHATSAPP, type WhatsAppMessenger } from '../messaging/whatsapp.js';
 import { PAYMENT_GATEWAY, type GatewayCapture, type PaymentGateway } from '../payments/gateway.js';
 import { systemActor, TransitionService, type Actor } from '../state/transition.service.js';
 import { BookingCore, OPEN_STATES } from './booking-core.js';
+import { GatewayRefundsService, refundIdOf } from './gateway-refunds.service.js';
 
 const { booking, payment, appUser, gatewayEvent } = schema;
 
@@ -53,11 +54,14 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
     @Inject(TransitionService) private readonly transitions: TransitionService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(BookingCore) private readonly core: BookingCore,
+    @Inject(GatewayRefundsService) private readonly refunds: GatewayRefundsService,
   ) {}
 
   onModuleInit() {
     if (!this.gateway || this.config.NODE_ENV === 'test') return;
-    this.timer = setInterval(() => void this.reconcileOpenLinks(), RECONCILE_EVERY_MS);
+    this.timer = setInterval(() => {
+      void this.reconcileOpenLinks().then(() => this.refunds.reconcileOpen());
+    }, RECONCILE_EVERY_MS);
     this.timer.unref();
   }
 
@@ -421,13 +425,26 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
     // A repeat delivery: already handled (NFR-09).
     if (!stored) return true;
 
-    setImmediate(() => void this.processEvent(stored.id, linkId, correlationId));
+    const refundId = refundIdOf(payload);
+    setImmediate(() => void this.processEvent(stored.id, linkId, refundId, correlationId));
     return true;
   }
 
-  private async processEvent(eventId: string, linkId: string | null, correlationId: string) {
+  private async processEvent(
+    eventId: string,
+    linkId: string | null,
+    gatewayRefundId: string | null,
+    correlationId: string,
+  ) {
     let error: string | null = null;
     try {
+      if (gatewayRefundId) {
+        // REFUND_STATUS_WEBHOOK: check the refund with the gateway.
+        const id = await this.refunds.idByGatewayRefundId(gatewayRefundId);
+        if (id) await this.refunds.reconcile(id, correlationId);
+        else error = `No refund ${gatewayRefundId}`;
+        return;
+      }
       const [p] = linkId
         ? await this.db
             .select({ id: payment.id })
@@ -439,11 +456,12 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       error = (err as Error).message;
       this.logger.warn(`Webhook event ${eventId} failed: ${error}`);
+    } finally {
+      await this.db
+        .update(gatewayEvent)
+        .set({ processedAt: new Date(), error })
+        .where(eq(gatewayEvent.id, eventId));
     }
-    await this.db
-      .update(gatewayEvent)
-      .set({ processedAt: new Date(), error })
-      .where(eq(gatewayEvent.id, eventId));
   }
 
   private async linkPayment(paymentId: string) {

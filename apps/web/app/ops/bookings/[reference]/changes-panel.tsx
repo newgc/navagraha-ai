@@ -6,12 +6,16 @@ import { PAYMENT_METHODS, formatDate, formatRupees, humanize, todayIso } from '@
 import {
   approveCancellation,
   approveChange,
+  approveGatewayRefund,
+  checkGatewayRefund,
   confirmRefund,
   recordRefund,
   rejectCancellation,
   rejectChange,
   rejectRefund,
   requestCancellation,
+  requestGatewayRefund,
+  sendGatewayRefund,
   requestChange,
   reviewCancellation,
   withdrawChange,
@@ -43,15 +47,25 @@ export interface Cancellation {
 
 export interface Refunds {
   duePaise: number;
+  /** The most one refund through Cashfree can return (0 without an online payment). */
+  gatewayRefundablePaise: number;
   items: {
     id: string;
     state: string;
     method: string;
     amountPaise: number;
-    reference: string;
-    paidOn: string;
+    reference: string | null;
+    paidOn: string | null;
     initiatedBy: string | null;
     reason: string | null;
+    gateway: {
+      paymentId: string;
+      approvedBy: string | null;
+      approvedAt: string | null;
+      sentAt: string | null;
+      status: string | null;
+      refundId: string;
+    } | null;
   }[];
 }
 
@@ -345,11 +359,21 @@ export function RefundsBlock({
       <ul className="plain">
         {refunds.items.map((r) => (
           <li key={r.id} className="payment">
-            {formatRupees(r.amountPaise)} · {PAYMENT_METHODS[r.method] ?? humanize(r.method)} ·{' '}
-            {r.reference} <span className="muted small">paid {formatDate(r.paidOn)}</span>{' '}
+            {formatRupees(r.amountPaise)} ·{' '}
+            {r.gateway ? 'Through Cashfree' : (PAYMENT_METHODS[r.method] ?? humanize(r.method))}
+            {r.reference && ` · ${r.reference}`}{' '}
+            {r.paidOn && <span className="muted small">paid {formatDate(r.paidOn)}</span>}{' '}
             <Badge state={r.state} />
             {r.reason && <div className="muted small">{r.reason}</div>}
-            {r.state === 'INITIATED' && canHandle && r.initiatedBy !== myId && (
+            {r.gateway && r.state === 'INITIATED' && (
+              <GatewayRefundStatus
+                reference={reference}
+                refund={r}
+                canHandle={canHandle}
+                myId={myId}
+              />
+            )}
+            {!r.gateway && r.state === 'INITIATED' && canHandle && r.initiatedBy !== myId && (
               <div className="row">
                 <ActionForm
                   action={confirmRefund.bind(null, reference, r.id)}
@@ -371,7 +395,7 @@ export function RefundsBlock({
                 </ActionForm>
               </div>
             )}
-            {r.state === 'INITIATED' && r.initiatedBy === myId && (
+            {!r.gateway && r.state === 'INITIATED' && r.initiatedBy === myId && (
               <p className="muted small">
                 You recorded this — someone else in Finance or a manager must confirm it (D-19).
               </p>
@@ -379,9 +403,34 @@ export function RefundsBlock({
           </li>
         ))}
       </ul>
+      {canHandle && refunds.duePaise > 0 && refunds.gatewayRefundablePaise > 0 && (
+        <details>
+          <summary>Refund through Cashfree</summary>
+          <p className="muted small">
+            Sends the money back to the customer&apos;s online payment. Someone else in Finance or a
+            manager approves it before anything is sent; it is marked refunded when Cashfree
+            confirms.
+          </p>
+          <ActionForm action={requestGatewayRefund.bind(null, reference)} label="Ask for refund">
+            <label>
+              Amount (₹)
+              <input
+                name="amount"
+                inputMode="decimal"
+                required
+                defaultValue={Math.min(refunds.duePaise, refunds.gatewayRefundablePaise) / 100}
+              />
+            </label>
+            <label>
+              Reason (shown to Cashfree)
+              <input name="reason" required placeholder="e.g. cancelled more than 7 days before" />
+            </label>
+          </ActionForm>
+        </details>
+      )}
       {canHandle && refunds.duePaise > 0 && (
         <details>
-          <summary>Record a refund paid</summary>
+          <summary>Record a refund paid outside Cashfree</summary>
           <ActionForm action={recordRefund.bind(null, reference)} label="Record refund">
             <label>
               Method
@@ -416,6 +465,79 @@ export function RefundsBlock({
             </label>
           </ActionForm>
         </details>
+      )}
+    </div>
+  );
+}
+
+function GatewayRefundStatus({
+  reference,
+  refund: r,
+  canHandle,
+  myId,
+}: {
+  reference: string;
+  refund: Refunds['items'][number];
+  canHandle: boolean;
+  myId: string | null;
+}) {
+  const g = r.gateway!;
+  if (!g.approvedBy) {
+    return r.initiatedBy === myId ? (
+      <p className="muted small">
+        You asked for this — someone else in Finance or a manager must approve it (D-19).
+      </p>
+    ) : (
+      <div>
+        <p className="muted small">Waiting for a second person to approve. Nothing is sent yet.</p>
+        {canHandle && (
+          <div className="row">
+            <ActionForm
+              action={approveGatewayRefund.bind(null, reference, r.id)}
+              label="Approve and send to Cashfree"
+              inline
+            />
+            <ActionForm
+              action={rejectRefund.bind(null, reference, r.id)}
+              label="Reject"
+              variant="danger"
+              inline
+            >
+              <input name="reason" placeholder="Why" required aria-label="Refund reject reason" />
+            </ActionForm>
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (!g.sentAt) {
+    return (
+      <div>
+        <p className="muted small">Approved, but Cashfree could not be reached. Send it again.</p>
+        {canHandle && (
+          <ActionForm
+            action={sendGatewayRefund.bind(null, reference, r.id)}
+            label="Send again"
+            variant="secondary"
+            inline
+          />
+        )}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <p className="muted small">
+        Sent to Cashfree ({humanize(g.status)}). It is marked refunded when Cashfree confirms; bank
+        refunds can take a few working days.
+      </p>
+      {canHandle && (
+        <ActionForm
+          action={checkGatewayRefund.bind(null, reference, r.id)}
+          label="Check refund status"
+          variant="secondary"
+          inline
+        />
       )}
     </div>
   );

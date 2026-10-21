@@ -379,22 +379,44 @@ export const refund = pgTable(
     state: refundState('state').notNull(),
     method: refundMethod('method').notNull(),
     amountPaise: integer('amount_paise').notNull(),
-    reference: text('reference').notNull(),
-    paidOn: date('paid_on').notNull(),
+    /** Offline refunds: the UPI / bank reference and the day it was paid. */
+    reference: text('reference'),
+    paidOn: date('paid_on'),
     initiatedByUserId: uuid('initiated_by_user_id').references(() => appUser.id),
     confirmedByUserId: uuid('confirmed_by_user_id').references(() => appUser.id),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
     /** [{ paymentId, paise }] — which payments the money came back from. */
     allocations: jsonb('allocations'),
     reason: text('reason'),
+    /** Gateway refunds (D-11): the online payment the money goes back to. */
+    paymentId: uuid('payment_id').references(() => payment.id),
+    /** The second person who approved sending it (D-19 extension), before any money moves. */
+    approvedByUserId: uuid('approved_by_user_id').references(() => appUser.id),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    /** Our refund id at the gateway, its last status and answer. */
+    gatewayRefundId: text('gateway_refund_id'),
+    gatewayStatus: text('gateway_status'),
+    gatewayResponse: jsonb('gateway_response'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
     ...timestamps(),
   },
   (t) => [
     index('refund_booking_idx').on(t.bookingId),
+    uniqueIndex('refund_gateway_id_uq').on(t.gatewayRefundId),
     check('refund_amount_chk', sql`${t.amountPaise} > 0`),
     check(
       'refund_two_person_chk',
       sql`${t.confirmedByUserId} is null or ${t.initiatedByUserId} is null or ${t.confirmedByUserId} <> ${t.initiatedByUserId}`,
+    ),
+    check(
+      'refund_approval_two_person_chk',
+      sql`${t.approvedByUserId} is null or ${t.initiatedByUserId} is null or ${t.approvedByUserId} <> ${t.initiatedByUserId}`,
+    ),
+    check(
+      'refund_method_details_chk',
+      // Compared as text: a value added to an enum cannot be used in the same migration.
+      sql`(${t.method}::text = 'GATEWAY' and ${t.paymentId} is not null and ${t.gatewayRefundId} is not null)
+        or (${t.method}::text <> 'GATEWAY' and ${t.reference} is not null and ${t.paidOn} is not null)`,
     ),
   ],
 );

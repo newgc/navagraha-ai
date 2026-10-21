@@ -227,6 +227,43 @@ export async function recordRefund(reference: string, _: ActionState, form: Form
   });
 }
 
+/** D-11 — ask for a refund to the customer's online payment; a second person approves it. */
+export async function requestGatewayRefund(reference: string, _: ActionState, form: FormData) {
+  const amountPaise = parseRupees(field(form, 'amount'));
+  if (!amountPaise) return { error: 'Enter the amount to refund' };
+  return call(reference, `/bookings/${reference}/refunds/gateway`, {
+    amountPaise,
+    reason: field(form, 'reason'),
+  });
+}
+
+export async function approveGatewayRefund(
+  reference: string,
+  id: string,
+  _: ActionState,
+  _form: FormData,
+) {
+  return call(reference, `/refunds/${id}/approve`, {});
+}
+
+export async function sendGatewayRefund(
+  reference: string,
+  id: string,
+  _: ActionState,
+  _form: FormData,
+) {
+  return call(reference, `/refunds/${id}/send`, {});
+}
+
+export async function checkGatewayRefund(
+  reference: string,
+  id: string,
+  _: ActionState,
+  _form: FormData,
+) {
+  return call(reference, `/refunds/${id}/check`, {});
+}
+
 export async function confirmRefund(
   reference: string,
   id: string,

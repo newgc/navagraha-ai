@@ -110,6 +110,58 @@ describe('Cashfree gateway (D-11)', () => {
     ]);
   });
 
+  it('sends refunds with our id as the idempotency key; sandbox asks for a simulated success', async () => {
+    const reply = {
+      refund_id: 'rabc',
+      cf_refund_id: 991,
+      refund_status: 'PENDING',
+    };
+    const { fetch, calls } = fakeFetch({
+      'POST /orders/CFPay_a/refunds': reply,
+      'GET /orders/CFPay_a/refunds/rabc': { ...reply, refund_status: 'SUCCESS' },
+    });
+    const g = gateway(fetch);
+    const sent = await g.createRefund({
+      orderId: 'CFPay_a',
+      refundId: 'rabc',
+      amountPaise: 300050,
+      note: 'Cancelled\nby family',
+    });
+    expect(sent).toMatchObject({ refundId: 'rabc', status: 'PENDING', gatewayRefundId: '991' });
+    expect(calls[0]!.headers['x-idempotency-key']).toBe('rabc');
+    expect(calls[0]!.body).toEqual({
+      refund_id: 'rabc',
+      refund_amount: 3000.5,
+      refund_note: 'SUCCESS',
+      refund_speed: 'STANDARD',
+    });
+    expect((await g.getRefund('CFPay_a', 'rabc')).status).toBe('SUCCESS');
+
+    const live = new CashfreeGateway({
+      env: 'production',
+      clientId: 'cid',
+      clientSecret: 'csecret',
+      apiVersion: '2026-01-01',
+      fetch: (async (_url: string, init: RequestInit) => {
+        calls.push({
+          url: _url,
+          method: init.method!,
+          headers: {},
+          body: JSON.parse(init.body as string),
+        });
+        return new Response(JSON.stringify(reply), { status: 200 });
+      }) as unknown as typeof globalThis.fetch,
+    });
+    await live.createRefund({
+      orderId: 'o',
+      refundId: 'rabc',
+      amountPaise: 100,
+      note: 'Cancelled\nby family',
+    });
+    expect(calls.at(-1)!.url).toBe('https://api.cashfree.com/pg/orders/o/refunds');
+    expect((calls.at(-1)!.body as { refund_note: string }).refund_note).toBe('Cancelled by family');
+  });
+
   it('reports gateway errors without credentials', async () => {
     const { fetch } = fakeFetch({});
     const err = await gateway(fetch)

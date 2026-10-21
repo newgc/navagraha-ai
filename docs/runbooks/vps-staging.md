@@ -151,7 +151,7 @@ Test money only — staging never uses real Cashfree keys.
 3. **Actions → Deploy to VPS → Run workflow.** Bookings now show **Send payment link**.
 4. Cashfree (still in Test) → **Developers → Webhooks → Add Webhook Endpoint**:
    `https://navagrahayathra.in/webhooks/cashfree`, latest version, **Test**, then select the
-   **payment** events (success, failed, user dropped).
+   **payment** events (success, failed, user dropped) and the **refund** events.
 5. Try it: send a link on a test booking, open it on your phone, pay with Cashfree's test UPI
    or card details, and watch the payment turn **Success** within a few seconds. If it does
    not, **Check payment status** on the booking reads it from Cashfree directly.
