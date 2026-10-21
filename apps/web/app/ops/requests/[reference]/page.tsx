@@ -14,7 +14,8 @@ import {
   humanize,
   todayIso,
 } from '@/lib/format';
-import { markLost, sendProposal, startPlanning } from './actions';
+import { markLost, sendProposal, startPlanning, suggestPlans } from './actions';
+import { PlanSuggestions, type Decision } from './plans';
 
 interface Traveller {
   fullName: string;
@@ -96,12 +97,24 @@ const DAYS: Record<string, string> = {
 };
 const rupees = (paise: number) => (paise / 100).toFixed(2).replace(/\.00$/, '');
 
-export default async function RequestPage({ params }: { params: Promise<{ reference: string }> }) {
+export default async function RequestPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ reference: string }>;
+  searchParams: Promise<{ decision?: string; use?: string }>;
+}) {
   const { reference } = await params;
-  const [r, t] = await Promise.all([
+  const { decision: decisionId, use } = await searchParams;
+  const [r, t, pl, d] = await Promise.all([
     api<LeadDetail>(`/trip-requests/${reference}`),
     api<{ temples: Temple[] }>('/temples'),
+    api<{ code: string; name: string; kind: string }[]>('/planner/places'),
+    decisionId ? api<Decision>(`/planner/decisions/${decisionId}`) : null,
   ]);
+  const places = pl.ok ? pl.data : [];
+  const decision = d?.ok ? d.data : null;
+  const chosen = decision?.result.candidates.find((c) => c.id === use && c.feasible);
   if (!r.ok && (r.status === 404 || r.status === 400)) notFound();
   if (!r.ok)
     return (
@@ -158,6 +171,28 @@ export default async function RequestPage({ params }: { params: Promise<{ refere
         }
       : {}),
     validUntil: todayIso(3),
+    // "Use this plan": the engine's order, days and times, checked again by the engine on send.
+    ...(chosen && decision
+      ? {
+          startDate: decision.input.startDate,
+          template: chosen.template as '1D' | '2D1N',
+          mode: chosen.mode,
+          pickupTime: decision.input.startTime ?? '',
+          stops: [
+            ...chosen.days.flatMap((day) =>
+              day.events.flatMap((e) =>
+                e.kind === 'VISIT'
+                  ? [{ templeCode: e.temple, include: true, day: day.day, plannedArrival: e.enter }]
+                  : [],
+              ),
+            ),
+            ...temples
+              .filter((x) => !chosen.days.some((day) => day.temples.includes(x.code)))
+              .map((x) => ({ templeCode: x.code, include: false, day: 1, plannedArrival: '' })),
+          ],
+          engine: { fromPlace: decision.input.fromPlace, startTime: decision.input.startTime },
+        }
+      : {}),
   };
 
   return (
@@ -234,6 +269,9 @@ export default async function RequestPage({ params }: { params: Promise<{ refere
                 <li key={p.version}>
                   v{p.version} · {formatRupees(p.totalPaise)} · {humanize(p.plan.trip.template)} on{' '}
                   {formatDate(p.plan.trip.startDate)} · valid until {formatDateTime(p.validUntil)}
+                  {(p as { validation?: { level?: string } }).validation?.level === 'ENGINE' && (
+                    <span className="small"> · engine-checked</span>
+                  )}
                   {p.accepted && <strong> · accepted</strong>}
                   {!p.accepted && p !== latest && <span className="muted"> · replaced</span>}
                 </li>
@@ -254,13 +292,76 @@ export default async function RequestPage({ params }: { params: Promise<{ refere
       </div>
 
       {open && (
-        <section>
+        <section className="card">
+          <h2>Suggest plans (planning engine)</h2>
+          <p className="muted small">
+            Uses only verified temple timings, visit times and travel times. Nothing missing is
+            guessed.
+          </p>
+          <ActionForm
+            action={suggestPlans.bind(null, q.reference, {
+              startDate: req.startDate,
+              travellers: req.travellers,
+              purpose: req.purpose,
+              days: req.days,
+            })}
+            label="Suggest plans"
+          >
+            <div className="row">
+              <label>
+                Start from
+                <select name="fromPlace" defaultValue={decision?.input.fromPlace ?? 'HUB-KUM'}>
+                  {places.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Date
+                <input
+                  name="startDate"
+                  type="date"
+                  defaultValue={decision?.input.startDate ?? req.startDate}
+                />
+              </label>
+              <label>
+                Pickup time
+                <input
+                  name="startTime"
+                  type="time"
+                  defaultValue={decision?.input.startTime ?? req.pickup.time ?? '06:00'}
+                />
+              </label>
+            </div>
+          </ActionForm>
+          {decision && (
+            <PlanSuggestions
+              reference={q.reference}
+              decision={decision}
+              names={Object.fromEntries(temples.map((x) => [x.code, x.commonName]))}
+              places={Object.fromEntries(places.map((p) => [p.code, p.name]))}
+            />
+          )}
+        </section>
+      )}
+
+      {open && (
+        <section id="proposal">
           <h2>{latest ? 'Send an updated proposal' : 'Send a proposal'}</h2>
+          {chosen && (
+            <p className="notice">
+              Filled in from the engine&apos;s {chosen.id} plan. It is checked again by the engine
+              when you send it; add the price lines.
+            </p>
+          )}
           <p className="muted">
             Plan and price it as for a phone booking. The customer gets it on WhatsApp, sees it at
             /trips and accepts it online; a new version replaces the previous one.
           </p>
           <BookingForm
+            key={chosen?.id ?? 'manual'}
             temples={temples}
             mode="proposal"
             initial={initial}

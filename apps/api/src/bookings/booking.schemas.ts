@@ -271,6 +271,10 @@ export const LeadProposalInput = z.object({
   itinerary: z.object({ stops: Stops, timingsCheckedByCoordinator: SignOff }),
   quote: z.object({ lines: QuoteLines, validUntil: z.iso.datetime({ offset: true }) }),
   fulfilment: z.array(FulfilmentInput).min(1).max(30).optional(),
+  /** P2: check the itinerary with the planning engine from this start place (travel matrix). */
+  engine: z
+    .object({ fromPlace: z.string().trim().min(1).max(40), startTime: hhmm.optional() })
+    .optional(),
 });
 export type LeadProposalInput = z.infer<typeof LeadProposalInput>;
 

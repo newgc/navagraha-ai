@@ -233,6 +233,11 @@ export default async function BookingPage({ params }: { params: Promise<{ refere
               (D-20).
             </p>
           )}
+          {b.itinerary?.validation?.engineChecked && (
+            <p className="small">
+              Checked by the planning engine against verified temple timings and travel times.
+            </p>
+          )}
           {b.itinerary?.validation?.warnings.map((w) => (
             <p key={w.message} className="notice small">
               {w.message}

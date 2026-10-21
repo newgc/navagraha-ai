@@ -57,6 +57,13 @@
       "when": 1792597933599,
       "tag": "0007_trip_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792600436923,
+      "tag": "0008_decision_records",
+      "breakpoints": true
     }
   ]
 }

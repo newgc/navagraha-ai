@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import type { ActionState } from '@/components/action-form';
 import type { CreateResult } from '@/app/ops/bookings/new/actions';
 import { api, errorText } from '@/lib/api';
@@ -40,4 +41,36 @@ export async function markLost(reference: string, _: ActionState, form: FormData
   if (!r.ok) return { error: errorText(r.error) };
   revalidatePath(`/ops/requests/${reference}`);
   return { done: true };
+}
+
+/** P2: run the planning engine for this request; the page then shows the decision record. */
+export async function suggestPlans(
+  reference: string,
+  request: {
+    startDate: string;
+    travellers: { ageBand: string; needsWheelchair?: boolean }[];
+    purpose: string;
+    days: string;
+  },
+  _: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const time = String(form.get('startTime') ?? '').trim();
+  const r = await api<{ decisionRecordId: string }>('/planner/plan', {
+    method: 'POST',
+    body: {
+      startDate: String(form.get('startDate') ?? request.startDate),
+      startTime: time || undefined,
+      fromPlace: String(form.get('fromPlace') ?? 'HUB-KUM'),
+      travellers: request.travellers.map((t) => ({
+        ageBand: t.ageBand,
+        needsWheelchair: t.needsWheelchair,
+      })),
+      purpose: request.purpose,
+      days: request.days,
+      leadReference: reference,
+    },
+  });
+  if (!r.ok) return { error: errorText(r.error) };
+  redirect(`/ops/requests/${reference}?decision=${r.data.decisionRecordId}`);
 }

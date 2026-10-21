@@ -66,6 +66,8 @@ export interface BookingPlan {
   acceptor: Actor;
   correlationId: string;
   auditAction: string;
+  /** The proposal's validation (ENGINE when the planning engine checked it). */
+  validation?: Record<string, unknown>;
 }
 
 const asActor = (auth: AuthContext): Actor => ({
@@ -222,6 +224,7 @@ export class BookingsService {
       templeIdByCode,
       warnings: check.warnings,
       acceptedVia: plan.acceptedVia,
+      validation: plan.validation,
     });
     const quoteId = await this.core.createQuote(tx, ctx, {
       bookingId: id,

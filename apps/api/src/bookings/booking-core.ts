@@ -192,11 +192,14 @@ export class BookingCore {
       warnings: unknown[];
       acceptedVia?: AcceptanceChannel;
       reason?: string;
+      /** A validation made earlier (a proposal's, possibly ENGINE-level); D-20 default otherwise. */
+      validation?: Record<string, unknown>;
     },
   ) {
     const opts = { correlationId: ctx.correlationId, sourceChannel: ctx.sourceChannel };
     const sys = systemActor(ctx.actor.userId);
     const id = randomUUID();
+    const engine = v.validation?.level === 'ENGINE';
     await tx.insert(itinerary).values({
       id,
       bookingId: v.bookingId,
@@ -220,12 +223,14 @@ export class BookingCore {
     await this.transitions.created(tx, itineraryMachine, id, 'DRAFT', ctx.actor, opts);
     await this.transitions.move(tx, itineraryMachine, id, 'DRAFT', 'VALIDATED', sys, {
       ...opts,
-      reason: 'Structural check passed; timings checked by coordinator (D-20)',
+      reason: engine
+        ? `Engine check passed on verified facts (decision record ${String(v.validation!.decisionRecordId)})`
+        : 'Structural check passed; timings checked by coordinator (D-20)',
     });
     await tx
       .update(itinerary)
       .set({
-        validation: {
+        validation: v.validation ?? {
           level: 'STRUCTURAL_WITH_OPS_SIGN_OFF',
           engineChecked: false,
           warnings: v.warnings,

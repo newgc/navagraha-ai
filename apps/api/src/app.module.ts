@@ -8,6 +8,7 @@ import { APP_CONFIG, loadConfig } from './config.js';
 import { DbModule } from './db/db.module.js';
 import { HealthController } from './health/health.controller.js';
 import { MessagingModule } from './messaging/whatsapp.js';
+import { PlannerModule } from './planner/planner.module.js';
 import { TemplesController } from './temples/temples.controller.js';
 import { TemplesService } from './temples/temples.service.js';
 
@@ -31,6 +32,7 @@ class ConfigModule {}
     MessagingModule,
     AuthModule,
     BookingsModule,
+    PlannerModule,
     TempleDataModule,
     TeamModule,
   ],

@@ -45,6 +45,8 @@ export interface BookingFormState {
   validUntil: string;
   acceptedVia: string;
   timingsChecked: boolean;
+  /** P2: check the proposal with the planning engine from this start place. */
+  engine?: { fromPlace: string; startTime?: string } | null;
 }
 
 const opt = (s: string) => (s.trim() ? s.trim() : undefined);
@@ -203,6 +205,7 @@ export function toLeadProposalPayload(
       itinerary: p.itinerary,
       quote: { lines: p.quote.lines, validUntil: p.quote.validUntil },
       fulfilment: p.fulfilment,
+      ...(f.engine ? { engine: f.engine } : {}),
     },
   };
 }

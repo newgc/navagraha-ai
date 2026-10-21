@@ -44,6 +44,11 @@ test('a customer requests a pilgrimage, gets a plan and books it', async ({ brow
   await ops.getByRole('link', { name: ref }).click();
   await expect(ops.getByText('Chennai, Anna Nagar')).toBeVisible();
   await expect(ops.getByText(/Lakshmi · Senior 75\+ · Parent · wheelchair/)).toBeVisible();
+  // The planning engine refuses to guess: this database has no verified timings yet.
+  await ops.getByRole('button', { name: 'Suggest plans' }).click();
+  await expect(ops.getByText('The engine cannot plan yet:')).toBeVisible();
+  await expect(ops.getByText(/verified opening hours are missing/).first()).toBeVisible();
+
   await ops.getByLabel('Line 1 description').fill('Innova Crysta, 2 days');
   await ops.getByLabel('Line 1 price').fill('9000');
   await ops.getByLabel(/I have checked temple opening hours/).check();

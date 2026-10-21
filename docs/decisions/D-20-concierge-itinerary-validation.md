@@ -22,3 +22,9 @@ The itinerary is stored with `validation.level = "STRUCTURAL_WITH_OPS_SIGN_OFF"`
 coordinator who signed off and every warning, so it is always clear it was **not
 engine-checked**. The DRAFT → VALIDATED transition is still made by the system, as D-04
 requires; the engine will set `validation.level = "ENGINE"` once it exists.
+
+## Update — 21 October 2026
+
+The engine exists (D-22). A proposal sent from an engine plan and still fitting the verified
+facts in its exact order is stored with `validation.level = "ENGINE"`; everything else keeps
+this decision's structural check and coordinator sign-off.

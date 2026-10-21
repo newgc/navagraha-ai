@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PlannerModule } from '../planner/planner.module.js';
 import { TransitionService } from '../state/transition.service.js';
 import {
   BookingsController,
@@ -22,6 +23,7 @@ import { PaymentLinksService } from './payment-links.service.js';
 import { gatewayProvider } from '../payments/gateway.js';
 
 @Module({
+  imports: [PlannerModule],
   controllers: [
     BookingsController,
     PaymentsController,

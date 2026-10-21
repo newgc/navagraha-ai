@@ -509,3 +509,29 @@ export const leadProposal = pgTable(
     check('lead_proposal_total_chk', sql`${t.totalPaise} = ${t.subtotalPaise} + ${t.taxPaise}`),
   ],
 );
+
+/**
+ * FS §8.2 DecisionRecord — every run of the planning engine: what it was asked, every
+ * candidate with its feasibility and failed constraint, the scores and the recommendation,
+ * and the versions of the planning settings and verified facts it used.
+ */
+export const decisionRecord = pgTable(
+  'decision_record',
+  {
+    id: id(),
+    /** PLAN: candidates for a request; EVALUATE: check of a given itinerary. */
+    kind: text('kind').notNull(),
+    leadId: uuid('lead_id').references(() => lead.id),
+    input: jsonb('input').notNull(),
+    /** DATA_INCOMPLETE / NO_FEASIBLE_PLAN / OK, or FEASIBLE / NOT_FEASIBLE for EVALUATE. */
+    status: text('status').notNull(),
+    result: jsonb('result').notNull(),
+    recommended: text('recommended'),
+    configVersion: text('config_version').notNull(),
+    factsVersion: text('facts_version').notNull(),
+    correlationId: text('correlation_id'),
+    createdByUserId: uuid('created_by_user_id').references(() => appUser.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('decision_record_lead_idx').on(t.leadId)],
+);

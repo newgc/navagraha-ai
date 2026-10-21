@@ -26,6 +26,7 @@ import { BookingCore, OPEN_STATES, today } from './booking-core.js';
 import type { LeadProposalInput, TripRequestInput } from './booking.schemas.js';
 import { BookingsService } from './bookings.service.js';
 import { PaymentLinksService } from './payment-links.service.js';
+import { PlannerService } from '../planner/planner.service.js';
 
 const { lead, leadProposal, booking, appUser, temple } = schema;
 
@@ -60,6 +61,7 @@ export class LeadsService {
     @Inject(BookingCore) private readonly core: BookingCore,
     @Inject(BookingsService) private readonly bookings: BookingsService,
     @Inject(PaymentLinksService) private readonly links: PaymentLinksService,
+    @Inject(PlannerService) private readonly planner: PlannerService,
   ) {}
 
   // ---------------------------------------------------------------- customer: request
@@ -223,6 +225,27 @@ export class LeadsService {
       throw new BadRequestException('quote.validUntil must be in the future');
     }
     const priced = this.core.price(input.quote.lines);
+    // P2: the planning engine checks this exact itinerary against verified facts.
+    const engine = input.engine
+      ? await this.planner.evaluate(
+          {
+            template: input.trip.template,
+            mode: input.trip.mode,
+            startDate: input.trip.startDate,
+            startTime: input.engine.startTime ?? input.trip.pickupTime ?? null,
+            fromPlace: input.engine.fromPlace,
+            travellers: input.travellers.map((t) => ({
+              ageBand: t.ageBand,
+              needsWheelchair: t.needsWheelchair,
+            })),
+            stops: input.itinerary.stops.map((s) => ({
+              templeCode: s.templeCode.toUpperCase(),
+              day: s.day,
+            })),
+          },
+          { userId: auth.userId, correlationId },
+        )
+      : null;
     const { customerPhone, version, totalPaise } = await this.db.transaction(async (tx) => {
       const l = await this.byReference(tx, reference, true);
       if (!(OPEN_LEAD as readonly string[]).includes(l.state)) {
@@ -260,6 +283,38 @@ export class LeadsService {
         .limit(1);
       const version = (last?.version ?? 0) + 1;
       const { timingsCheckedByCoordinator: _, ...itinerary } = input.itinerary;
+      const signOff = { signedOffBy: auth.userId, signedOffAt: new Date().toISOString() };
+      const validation =
+        engine?.status === 'FEASIBLE'
+          ? {
+              level: 'ENGINE',
+              engineChecked: true,
+              decisionRecordId: engine.decisionRecordId,
+              configVersion: engine.configVersion,
+              factsVersion: engine.factsVersion,
+              warnings: [...check.warnings, ...engine.notes],
+              ...signOff,
+            }
+          : {
+              level: 'STRUCTURAL_WITH_OPS_SIGN_OFF',
+              engineChecked: false,
+              warnings: [
+                ...check.warnings,
+                ...(engine?.status === 'NOT_FEASIBLE'
+                  ? [{ code: 'ENGINE_NOT_FEASIBLE', message: `Engine: ${engine.failure!.message}` }]
+                  : []),
+                ...(engine?.status === 'DATA_INCOMPLETE'
+                  ? [
+                      {
+                        code: 'ENGINE_DATA_INCOMPLETE',
+                        message: `Engine could not check: ${engine.gaps.length} verified facts missing`,
+                      },
+                    ]
+                  : []),
+              ],
+              ...(engine ? { decisionRecordId: engine.decisionRecordId } : {}),
+              ...signOff,
+            };
       const [row] = await tx
         .insert(leadProposal)
         .values({
@@ -270,13 +325,7 @@ export class LeadsService {
           taxPaise: priced.taxPaise,
           totalPaise: priced.totalPaise,
           validUntil,
-          validation: {
-            level: 'STRUCTURAL_WITH_OPS_SIGN_OFF',
-            engineChecked: false,
-            warnings: check.warnings,
-            signedOffBy: auth.userId,
-            signedOffAt: new Date().toISOString(),
-          },
+          validation,
           createdByUserId: auth.userId,
         })
         .returning();
@@ -441,7 +490,9 @@ export class LeadsService {
       totalPaise: p.totalPaise,
       // D-20 / NAV-AI-008: say how the plan was checked.
       checked:
-        'Planned and checked by our team; timings are confirmed with temples and drivers before your trip.',
+        (p.validation as { level?: string }).level === 'ENGINE'
+          ? 'Checked against verified temple timings and travel times, and by our team; timings are confirmed again before your trip.'
+          : 'Planned and checked by our team; timings are confirmed with temples and drivers before your trip.',
     };
   }
 
@@ -485,6 +536,7 @@ export class LeadsService {
         acceptor: customer,
         correlationId,
         auditAction: 'booking.web_created',
+        validation: latest.validation as Record<string, unknown>,
       });
       await this.transitions.move(
         tx,
