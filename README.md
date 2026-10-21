@@ -115,7 +115,8 @@ payment condition and every mandatory supplier item are both satisfied (FS §33)
 ## Hosting (AWS Lightsail)
 
 `navagrahaai.newgc.in` runs on AWS Lightsail: one container service (web + API from the
-same `Dockerfile`) and a managed, encrypted PostgreSQL 16 database. Every push to `main`
+same `Dockerfile`). Staging uses a free Neon PostgreSQL 16 database (test data only);
+before real customers it moves to an encrypted Lightsail database in Mumbai. Every push to `main`
 deploys there once CI is green. Click-by-click setup, sign-in codes, domain and rollback:
 [docs/runbooks/aws-lightsail.md](docs/runbooks/aws-lightsail.md).
 

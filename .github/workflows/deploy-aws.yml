@@ -1,10 +1,12 @@
 # Deploys main to AWS Lightsail (navagrahaai.newgc.in) after CI passes on it.
 #
 # GitHub → Settings → Environments → "staging" (see docs/runbooks/aws-lightsail.md):
-#   Secrets:   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DB_PASSWORD, AUTH_SECRET
+#   Secrets:   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AUTH_SECRET, and the database:
+#              either DATABASE_URL (a hosted database such as Neon — staging) or
+#              DB_PASSWORD with the DB_* variables below (a Lightsail database)
 #   Variables: AWS_REGION (e.g. ap-south-1), LIGHTSAIL_SERVICE (e.g. navagraha),
-#              DB_ENDPOINT, DB_USER (dbmasteruser), DB_NAME (navagraha),
-#              BOOTSTRAP_ADMIN_PHONES (first admin's mobile)
+#              BOOTSTRAP_ADMIN_PHONES (first admin's mobile), NODE_HEAP_MB (optional),
+#              DB_ENDPOINT, DB_USER (dbmasteruser), DB_NAME (navagraha) — Lightsail DB only
 #
 # Builds the exact commit CI tested into one image, pushes it to the Lightsail service and
 # creates a deployment. Lightsail keeps the previous deployment running until the new one is
@@ -43,18 +45,24 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           DB_ENDPOINT: ${{ vars.DB_ENDPOINT }}
         run: |
           missing=""
-          for v in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY DB_PASSWORD AUTH_SECRET AWS_REGION DB_ENDPOINT; do
+          for v in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AUTH_SECRET AWS_REGION; do
             [ -n "${!v}" ] || missing="$missing $v"
           done
+          if [ -z "$DATABASE_URL" ] && { [ -z "$DB_PASSWORD" ] || [ -z "$DB_ENDPOINT" ]; }; then
+            missing="$missing DATABASE_URL(or DB_PASSWORD+DB_ENDPOINT)"
+          fi
           if [ -n "$missing" ]; then
             # Not set up yet: skip quietly instead of failing every push (docs/runbooks/aws-lightsail.md).
             echo "::notice::AWS deploy skipped — missing in the staging environment:$missing"
             echo "configured=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$DATABASE_URL" ] && ! printf '%s' "$DATABASE_URL" | grep -Eq '^postgres(ql)?://'; then
+            echo "::error::DATABASE_URL must start with postgres:// or postgresql://"; exit 1
           elif [ "${#AUTH_SECRET}" -lt 32 ]; then
             echo "::error::AUTH_SECRET must be at least 32 characters"; exit 1
           else
@@ -89,9 +97,11 @@ jobs:
       - name: Deploy
         if: steps.settings.outputs.configured == 'true'
         env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           DB_ENDPOINT: ${{ vars.DB_ENDPOINT }}
+          NODE_HEAP_MB: ${{ vars.NODE_HEAP_MB }}
           DB_USER: ${{ vars.DB_USER || 'dbmasteruser' }}
           DB_NAME: ${{ vars.DB_NAME || 'navagraha' }}
           BOOTSTRAP_ADMIN_PHONES: ${{ vars.BOOTSTRAP_ADMIN_PHONES }}

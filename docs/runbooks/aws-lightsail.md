@@ -1,42 +1,51 @@
 # Hosting on AWS Lightsail — navagrahaai.newgc.in
 
-Everything here is done by clicking in the AWS, GitHub and GoDaddy websites. After the
+Everything here is done by clicking in the AWS, Neon, GitHub and GoDaddy websites. After the
 one-time setup, every push to `main` that passes CI deploys itself.
 
 **What runs:** one Lightsail **container service** with two containers from the same image
-— `web` (the public website) and `api` (reachable only from `web`, over localhost) — and one
-Lightsail **PostgreSQL 16** database, encrypted at rest, reached over verified TLS.
-Lightsail keeps the previous deployment running until a new one is healthy.
+— `web` (the public website) and `api` (reachable only from `web`, over localhost). Staging's
+database is a free **Neon** PostgreSQL 16 database (encrypted at rest), reached over verified
+TLS. Lightsail keeps the previous deployment running until a new one is healthy.
 
-**Cost:** about US$45 a month — container service _Small_ ($15) + database _Standard 2 GB,
-encrypted_ ($30). Prices from the Lightsail pricing page, October 2026.
+**Cost (staging):** about US$10 a month — container service _Micro_ ($10; new AWS accounts
+get it free for the first 3 months) + Neon _Free_ plan ($0: 0.5 GB storage, 100 compute
+hours a month; the database sleeps after 5 idle minutes, so the first request after a quiet
+spell takes about a second longer). Prices from the Lightsail and Neon pricing pages,
+October 2026.
 
-**Staging:** there is no SMS provider yet (D-11), so sign-in codes appear in the container
-logs instead of being sent. Real customers cannot sign in until one is chosen.
+**Staging holds test data only.** Neon's free plan has no Mumbai region, so the data sits in
+Singapore. Before real customers' names and phone numbers go in (MR-37), move to the
+encrypted Lightsail database in Mumbai — see [Before real customers](#before-real-customers).
+
+**Staging sign-in:** there is no SMS provider yet (D-11), so sign-in codes appear in the
+container logs instead of being sent. Real customers cannot sign in until one is chosen.
 
 ---
 
-## 1. Database (Lightsail console)
+## 1. Database (Neon website)
 
-1. Sign in to the AWS console, open **Lightsail**, and pick region **Mumbai (ap-south-1)**
-   (top right). Use the same region for everything below.
-2. **Databases → Create database**
-   - Database: **PostgreSQL**, the newest **16.x** version.
-   - Login credentials: keep the user name **`dbmasteruser`**. Choose **Specify your own
-     password** and use a long random one from a password manager. Save it — it becomes the
-     `DB_PASSWORD` secret.
-   - Master database name: **`navagraha`**.
-   - Plan: **Standard, 2 GB, $30** (the cheapest _encrypted_ plan; the database holds
-     travellers' names and phone numbers — MR-37).
-   - Name: `navagraha-db` → **Create database**. It takes about 15 minutes.
-3. When it is _Available_, open it and copy the **Endpoint** (looks like
-   `ls-xxxx.xxxx.ap-south-1.rds.amazonaws.com`). That is `DB_ENDPOINT`.
-   Leave **Public mode** off.
+1. Go to **neon.tech → Sign up** (sign in with Google or GitHub is fine). The Free plan needs
+   no card.
+2. **Create project**
+   - Project name: `navagraha-staging`
+   - Postgres version: **16**
+   - Cloud provider **AWS**, region **Asia Pacific (Singapore)** — the closest to Mumbai.
+   - Database name: **`navagraha`** → **Create project**.
+3. On the project dashboard click **Connect**. In the dialog:
+   - Branch `production`, database `navagraha`, role `neondb_owner` (or the role shown).
+   - Turn **Connection pooling off** (the app keeps its own small pool; migrations need a
+     direct connection).
+   - Copy the **connection string**. It looks like
+     `postgresql://neondb_owner:xxxx@ep-xxxx.ap-southeast-1.aws.neon.tech/navagraha?sslmode=require&channel_binding=require`.
+     Paste it as is — the app keeps the TLS certificate check on regardless of the URL. It
+     contains the password, so it goes **only** into the GitHub secret `DATABASE_URL`
+     (step 4), never into chat or email.
 
 ## 2. Container service (Lightsail console)
 
 1. **Containers → Create container service**, same region.
-2. Power **Small** ($15), scale **1**. Keep scale at 1: migrations run when the API starts
+2. Power **Micro** ($10, 1 GB memory — enough for staging), scale **1**. Keep scale at 1: migrations run when the API starts
    and are not coordinated between several copies.
 3. Skip "Set up deployment" — GitHub will deploy.
 4. Name it **`navagraha`** → **Create container service**.
@@ -62,7 +71,7 @@ GitHub → `newgc/navagraha-ai` → **Settings → Environments → New environm
 | ----------------------- | --------------------------------------------------------------------------------------------------- |
 | `AWS_ACCESS_KEY_ID`     | from step 3                                                                                         |
 | `AWS_SECRET_ACCESS_KEY` | from step 3                                                                                         |
-| `DB_PASSWORD`           | the database password from step 1                                                                   |
+| `DATABASE_URL`          | the Neon connection string from step 1                                                              |
 | `AUTH_SECRET`           | a new random string of 48+ characters from a password manager's generator. Never reuse it anywhere. |
 
 **Environment variables**
@@ -71,9 +80,6 @@ GitHub → `newgc/navagraha-ai` → **Settings → Environments → New environm
 | ------------------------ | ----------------------------------------------------------------------- |
 | `AWS_REGION`             | `ap-south-1`                                                            |
 | `LIGHTSAIL_SERVICE`      | `navagraha`                                                             |
-| `DB_ENDPOINT`            | from step 1                                                             |
-| `DB_USER`                | `dbmasteruser`                                                          |
-| `DB_NAME`                | `navagraha`                                                             |
 | `BOOTSTRAP_ADMIN_PHONES` | your mobile number, e.g. `98765 43210` (becomes the first System Admin) |
 
 Then **Actions → Deploy to AWS → Run workflow**. It takes about 10 minutes the first time.
@@ -106,14 +112,45 @@ like `https://navagraha.xxxx.ap-south-1.cs.amazonlightsail.com` — open it to c
 - **A deploy failed** — Actions shows the error; Lightsail keeps the previous version
   running. Lightsail → `navagraha` → **Deployments** and **Logs** show why.
 - **Roll back** — Lightsail → `navagraha` → **Deployments** → pick an earlier version →
-  _Modify and redeploy_. Migrations only go forward; Lightsail backs up the database daily
-  (Database → _Snapshots_), and a snapshot can be restored to a new database.
+  _Modify and redeploy_. Migrations only go forward; Neon's free plan can restore the
+  database to any point in the last 6 hours (Neon → **Restore**).
 - **Sign-in codes** — Logs → container `api` (staging only).
 - **Temple data** — content admins upload the workbook at `/ops/temples`.
 
 ## If the API cannot reach the database
 
-The API log then shows a connection error at start. Check `DB_ENDPOINT` and `DB_PASSWORD`
-first. If they are right, open the database → **Networking** and enable **Public mode**
-(the connection still needs the password and is encrypted and certificate-checked), then
-redeploy.
+The API log then shows a connection error at start. Check the `DATABASE_URL` secret first:
+copy it again from Neon → **Connect** (pooling off) and replace the secret, then **Actions →
+Deploy to AWS → Run workflow**. A log line `Database connection closed by the server` on its
+own is normal: Neon put the idle database to sleep, and the next request wakes it.
+
+If the API container restarts with an out-of-memory error, set the variable `NODE_HEAP_MB`
+lower (default 320) or move the service to the _Small_ power ($15) and set it to `640`.
+
+---
+
+## Before real customers
+
+Do this before the pilot takes real bookings (MR-37: travellers' data encrypted, and kept in
+India). Neon stays usable for a separate test site if wanted.
+
+1. Lightsail (region **Mumbai**) → **Databases → Create database**
+   - **PostgreSQL**, the newest **16.x** version.
+   - Keep user name **`dbmasteruser`**; **Specify your own password** — a long random one
+     from a password manager. It becomes the `DB_PASSWORD` secret.
+   - Master database name: **`navagraha`**.
+   - Plan: **Standard, 2 GB, $30** (the cheapest _encrypted_ plan).
+   - Name `navagraha-db` → **Create database** (about 15 minutes).
+2. When it is _Available_, copy the **Endpoint**
+   (`ls-xxxx.xxxx.ap-south-1.rds.amazonaws.com`). Leave **Public mode** off.
+3. GitHub → environment → **delete** the `DATABASE_URL` secret, add the secret
+   `DB_PASSWORD`, and the variables `DB_ENDPOINT` (the endpoint), `DB_USER` (`dbmasteruser`)
+   and `DB_NAME` (`navagraha`). The deploy then connects to Lightsail and checks its
+   certificate against Amazon's bundle in the image.
+4. Consider the container power _Small_ for real traffic (variable `NODE_HEAP_MB` = `640`).
+5. **Run workflow.** The new database starts empty: the API creates the tables and you sign
+   in as the first admin again (step 6). Test data on Neon is not copied.
+
+If the API then cannot reach the Lightsail database, check `DB_ENDPOINT` and `DB_PASSWORD`.
+If they are right, open the database → **Networking** and enable **Public mode** (the
+connection still needs the password and is encrypted and certificate-checked), then redeploy.

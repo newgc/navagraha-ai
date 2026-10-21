@@ -13,25 +13,36 @@ env = os.environ
 image = sys.argv[1]
 out = sys.argv[2] if len(sys.argv) > 2 else "."
 
-# The password may contain URL-special characters, so build the URL with encoding.
-database_url = "postgres://{user}:{password}@{host}:5432/{name}".format(
-    user=quote(env["DB_USER"], safe=""),
-    password=quote(env["DB_PASSWORD"], safe=""),
-    host=env["DB_ENDPOINT"],
-    name=quote(env["DB_NAME"], safe=""),
-)
+if env.get("DATABASE_URL"):
+    # A hosted database's full connection string (staging uses Neon's free plan). Its
+    # certificate is publicly signed, so verify it against Node's built-in CAs; the client
+    # drops sslmode/channel_binding from the URL and applies verified TLS itself.
+    database_url = env["DATABASE_URL"]
+    database_tls = {"DATABASE_SSL": "verify"}
+else:
+    # A Lightsail database. The password may contain URL-special characters, so build the
+    # URL with encoding, and verify TLS against Amazon's bundle shipped in the image.
+    database_url = "postgres://{user}:{password}@{host}:5432/{name}".format(
+        user=quote(env["DB_USER"], safe=""),
+        password=quote(env["DB_PASSWORD"], safe=""),
+        host=env["DB_ENDPOINT"],
+        name=quote(env["DB_NAME"], safe=""),
+    )
+    database_tls = {"DATABASE_SSL_CA": "/etc/ssl/rds/global-bundle.pem"}
 
 common = {
     "NODE_ENV": "production",
     "DEPLOY_ENV": env.get("DEPLOY_ENV", "staging"),
     "DATABASE_URL": database_url,
-    # Verify the database's TLS certificate against Amazon's bundle shipped in the image.
-    "DATABASE_SSL_CA": "/etc/ssl/rds/global-bundle.pem",
+    **database_tls,
     "AUTH_SECRET": env["AUTH_SECRET"],
     "OTP_SENDER": "console",
     "API_HOST": "127.0.0.1",
     "API_PORT": "4000",
     "API_URL": "http://127.0.0.1:4000",
+    # Both containers share the service's memory (1 GB on the Micro power), so cap each
+    # Node heap to keep one from starving the other. Raise with NODE_HEAP_MB on bigger powers.
+    "NODE_OPTIONS": "--max-old-space-size={}".format(int(env.get("NODE_HEAP_MB") or 320)),
 }
 if env.get("BOOTSTRAP_ADMIN_PHONES"):
     common["BOOTSTRAP_ADMIN_PHONES"] = env["BOOTSTRAP_ADMIN_PHONES"]
