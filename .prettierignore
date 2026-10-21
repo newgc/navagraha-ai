@@ -3,3 +3,6 @@ docs/spec/
 packages/db/drizzle/
 .next/
 dist/
+# Vendored Neon agent skills (npx neon skills); keep as published
+.claude/skills/
+skills-lock.json
