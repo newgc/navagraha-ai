@@ -1,0 +1,127 @@
+# Deploys main to AWS Lightsail (navagrahaai.newgc.in) after CI passes on it.
+#
+# GitHub → Settings → Environments → "staging" (see docs/runbooks/aws-lightsail.md):
+#   Secrets:   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DB_PASSWORD, AUTH_SECRET
+#   Variables: AWS_REGION (e.g. ap-south-1), LIGHTSAIL_SERVICE (e.g. navagraha),
+#              DB_ENDPOINT, DB_USER (dbmasteruser), DB_NAME (navagraha),
+#              BOOTSTRAP_ADMIN_PHONES (first admin's mobile)
+#
+# Builds the exact commit CI tested into one image, pushes it to the Lightsail service and
+# creates a deployment. Lightsail keeps the previous deployment running until the new one is
+# healthy, so a broken release never replaces a working one.
+
+name: Deploy to AWS
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      SERVICE: ${{ vars.LIGHTSAIL_SERVICE || 'navagraha' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Deploy exactly the commit CI tested.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Check settings
+        id: settings
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          DB_ENDPOINT: ${{ vars.DB_ENDPOINT }}
+        run: |
+          missing=""
+          for v in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY DB_PASSWORD AUTH_SECRET AWS_REGION DB_ENDPOINT; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            # Not set up yet: skip quietly instead of failing every push (docs/runbooks/aws-lightsail.md).
+            echo "::notice::AWS deploy skipped — missing in the staging environment:$missing"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          elif [ "${#AUTH_SECRET}" -lt 32 ]; then
+            echo "::error::AUTH_SECRET must be at least 32 characters"; exit 1
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: AWS credentials
+        if: steps.settings.outputs.configured == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Build image
+        if: steps.settings.outputs.configured == 'true'
+        run: docker build -t "navagraha:${GITHUB_SHA::7}" .
+
+      - name: Push image to Lightsail
+        if: steps.settings.outputs.configured == 'true'
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/lightsailctl \
+            https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl
+          sudo chmod +x /usr/local/bin/lightsailctl
+          out=$(aws lightsail push-container-image --service-name "$SERVICE" \
+            --label app --image "navagraha:${GITHUB_SHA::7}")
+          echo "$out"
+          image=$(printf '%s\n' "$out" | grep -o '":[^"]*"' | tr -d '"' | tail -1)
+          [ -n "$image" ] || { echo "::error::Could not read the pushed image name"; exit 1; }
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+
+      - name: Deploy
+        if: steps.settings.outputs.configured == 'true'
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          DB_ENDPOINT: ${{ vars.DB_ENDPOINT }}
+          DB_USER: ${{ vars.DB_USER || 'dbmasteruser' }}
+          DB_NAME: ${{ vars.DB_NAME || 'navagraha' }}
+          BOOTSTRAP_ADMIN_PHONES: ${{ vars.BOOTSTRAP_ADMIN_PHONES }}
+        run: |
+          python3 deploy/aws/render-deployment.py "$IMAGE" "$RUNNER_TEMP"
+          version=$(aws lightsail create-container-service-deployment --service-name "$SERVICE" \
+            --containers "file://$RUNNER_TEMP/containers.json" \
+            --public-endpoint "file://$RUNNER_TEMP/endpoint.json" \
+            --query 'containerService.nextDeployment.version' --output text)
+          rm -f "$RUNNER_TEMP/containers.json"
+          echo "Deployment $version started; waiting for it to become active…"
+          for _ in $(seq 1 90); do
+            state=$(aws lightsail get-container-service-deployments --service-name "$SERVICE" \
+              --query "deployments[?version==\`$version\`].state | [0]" --output text)
+            case "$state" in
+              ACTIVE) echo "Deployment $version is live."; exit 0 ;;
+              FAILED) echo "::error::Deployment $version failed; the previous deployment keeps running. See the container logs in the Lightsail console."; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Timed out waiting for deployment $version"; exit 1
+
+      - name: Keep the last 10 images
+        if: steps.settings.outputs.configured == 'true'
+        run: |
+          # Newest first by creation time; never the image just deployed.
+          aws lightsail get-container-images --service-name "$SERVICE" \
+            --query 'reverse(sort_by(containerImages, &createdAt))[10:].image' --output text \
+            | tr '\t' '\n' | while read -r img; do
+              if [ -n "$img" ] && [ "$img" != "None" ] && [ "$img" != "$IMAGE" ]; then
+                aws lightsail delete-container-image --service-name "$SERVICE" --image "$img" || true
+              fi
+            done

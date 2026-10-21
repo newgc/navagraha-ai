@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DeployNavagrahaToLightsailContainers",
+      "Effect": "Allow",
+      "Action": [
+        "lightsail:CreateContainerServiceRegistryLogin",
+        "lightsail:RegisterContainerImage",
+        "lightsail:GetContainerImages",
+        "lightsail:DeleteContainerImage",
+        "lightsail:CreateContainerServiceDeployment",
+        "lightsail:GetContainerServiceDeployments",
+        "lightsail:GetContainerServices"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

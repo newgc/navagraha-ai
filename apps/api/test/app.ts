@@ -24,7 +24,7 @@ export class CapturingOtpSender implements OtpSender {
 }
 
 /** A fully wired app on a freshly migrated and seeded database. */
-export async function createTestApp(url: string) {
+export async function createTestApp(url: string, overrides: Partial<AppConfig> = {}) {
   const { db, pool } = createDb(url);
   await resetDatabase(db);
   await seedDatabase(db);
@@ -37,6 +37,7 @@ export async function createTestApp(url: string) {
     DATABASE_URL: url,
     AUTH_SECRET: 'test-secret-test-secret-test-secret-0000',
     OTP_SENDER: 'console',
+    ...overrides,
   };
   const otp = new CapturingOtpSender();
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })

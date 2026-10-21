@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+apps/web/.next
+apps/web/test-results
+apps/web/playwright-report
+docs/spec
+.env
+.env.*

@@ -26,6 +26,7 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
           {staffRoles.some((r) => TEMPLE_DATA_ROLES.includes(r)) && (
             <Link href="/ops/temples">Temple data</Link>
           )}
+          {staffRoles.includes('SYSTEM_ADMIN') && <Link href="/ops/team">Team</Link>}
         </nav>
         <div className="who">
           <span>

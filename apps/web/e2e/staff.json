@@ -1,0 +1,38 @@
+{
+  "coordinator": {
+    "phone": "+917000099001",
+    "typed": "70000 99001",
+    "name": "Meena (Coordinator)",
+    "role": "OPS_COORDINATOR"
+  },
+  "finance": {
+    "phone": "+917000099002",
+    "typed": "70000 99002",
+    "name": "Arun (Finance)",
+    "role": "FINANCE"
+  },
+  "coordinator2": {
+    "phone": "+917000099004",
+    "typed": "70000 99004",
+    "name": "Selvi (Coordinator)",
+    "role": "OPS_COORDINATOR"
+  },
+  "coordinator3": {
+    "phone": "+917000099005",
+    "typed": "70000 99005",
+    "name": "Ravi (Coordinator)",
+    "role": "OPS_COORDINATOR"
+  },
+  "manager": {
+    "phone": "+917000099006",
+    "typed": "70000 99006",
+    "name": "Divya (Manager)",
+    "role": "OPS_MANAGER"
+  },
+  "content": {
+    "phone": "+917000099003",
+    "typed": "70000 99003",
+    "name": "Lakshmi (Content)",
+    "role": "CONTENT_ADMIN"
+  }
+}

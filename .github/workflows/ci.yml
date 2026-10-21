@@ -90,3 +90,21 @@ jobs:
           name: playwright-traces
           path: apps/web/test-results
           retention-days: 7
+
+  image:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the deploy image
+        run: docker build -t navagraha:ci .
+      - name: Image starts and has what the containers need
+        run: |
+          docker run --rm --entrypoint sh navagraha:ci -c '
+            test -r /etc/ssl/rds/global-bundle.pem &&
+            test -f packages/db/dist/scripts/migrate.js &&
+            test -f apps/api/dist/main.js &&
+            test -d apps/web/.next &&
+            node -e "require(\"tls\").createSecureContext({ ca: require(\"fs\").readFileSync(\"/etc/ssl/rds/global-bundle.pem\") })" &&
+            echo image ok'

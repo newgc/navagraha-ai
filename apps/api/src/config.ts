@@ -22,6 +22,12 @@ const EnvSchema = z
      */
     OTP_SENDER: z.enum(['console', 'file']).default('console'),
     OTP_OUTBOX_FILE: z.string().min(1).optional(),
+    /**
+     * Phone numbers (comma-separated) that are made System Admin and Operations Manager at
+     * startup, so the first admin can sign in on a server with no command line (Lightsail).
+     * Idempotent and audited; manage everyone else on the Team screen.
+     */
+    BOOTSTRAP_ADMIN_PHONES: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.OTP_SENDER === 'file' && !env.OTP_OUTBOX_FILE) {

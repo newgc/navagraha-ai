@@ -38,6 +38,9 @@ Product Owner decisions in `docs/decisions/` override the FS.
   `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium` if Playwright's own browser isn't installed.
 - Web: the API token stays in an httpOnly cookie; only server code (`lib/api.ts`, server
   actions) calls the API. `@navagraha/db` must not be imported by app code (only e2e setup).
+- Deploy: `Dockerfile` (one image, two start scripts in `deploy/container/`) →
+  `.github/workflows/deploy-aws.yml` → Lightsail. Runbook: `docs/runbooks/aws-lightsail.md`.
+  There is no server shell: anything an operator needs must be on a screen or in Lightsail.
 - Schema changes: edit `packages/db/src/schema`, run `pnpm db:generate`, commit the migration.
 - Reference spec IDs (NAV-_, MR-_, EC-_, D-_) in code comments and commit messages where they
   explain why.

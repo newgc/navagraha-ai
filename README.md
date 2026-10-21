@@ -112,11 +112,15 @@ The itinerary is checked structurally and needs the coordinator's sign-off that 
 timings by hand (D-20). The booking confirms itself, and its Trip is created, as soon as the
 payment condition and every mandatory supplier item are both satisfied (FS §33).
 
-## Staging server
+## Hosting (AWS Lightsail)
 
-`navagrahaai.newgc.in` runs on the InstaLeads VPS, kept apart from it. Setup, deploys,
-sign-in codes, rollback: [docs/runbooks/staging-server.md](docs/runbooks/staging-server.md).
-Every push to `main` deploys there once CI is green.
+`navagrahaai.newgc.in` runs on AWS Lightsail: one container service (web + API from the
+same `Dockerfile`) and a managed, encrypted PostgreSQL 16 database. Every push to `main`
+deploys there once CI is green. Click-by-click setup, sign-in codes, domain and rollback:
+[docs/runbooks/aws-lightsail.md](docs/runbooks/aws-lightsail.md).
+
+The first System Admin comes from `BOOTSTRAP_ADMIN_PHONES`; everyone else is managed on the
+**Team** screen (`/ops/team`).
 
 ## Checks
 

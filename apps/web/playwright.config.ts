@@ -8,11 +8,11 @@ import { defineConfig } from '@playwright/test';
 const API_PORT = 4100;
 const WEB_PORT = 3100;
 export const OTP_OUTBOX = path.resolve(import.meta.dirname, 'test-results', 'otp-outbox.txt');
+export const FILLED_WORKBOOK = path.join(path.dirname(OTP_OUTBOX), 'filled-workbook.xlsx');
 const databaseUrl = process.env.E2E_DATABASE_URL ?? '';
 
 export default defineConfig({
   testDir: './e2e',
-  globalSetup: './e2e/global-setup.ts',
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -26,16 +26,20 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'node ../api/dist/main.js',
+      // Prepare the database first, then start the API (which grants the bootstrap admin).
+      command: `node e2e/prepare.mjs "${OTP_OUTBOX}" "${FILLED_WORKBOOK}" && node ../api/dist/main.js`,
       url: `http://localhost:${API_PORT}/v1/health`,
       reuseExistingServer: false,
       env: {
         NODE_ENV: 'test',
         DATABASE_URL: databaseUrl,
+        E2E_DATABASE_URL: databaseUrl,
         API_PORT: String(API_PORT),
         AUTH_SECRET: 'e2e-secret-e2e-secret-e2e-secret-e2e-0000',
         OTP_SENDER: 'file',
         OTP_OUTBOX_FILE: OTP_OUTBOX,
+        // The first admin comes from this setting, as on a real server (see docs/runbooks).
+        BOOTSTRAP_ADMIN_PHONES: '+917000099099',
       },
     },
     {

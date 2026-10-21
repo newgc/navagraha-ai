@@ -1,49 +1,32 @@
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, type Page } from '@playwright/test';
 import { OTP_OUTBOX } from '../playwright.config';
 
-export const FILLED_WORKBOOK = path.join(path.dirname(OTP_OUTBOX), 'filled-workbook.xlsx');
+export { FILLED_WORKBOOK } from '../playwright.config';
 
-export const STAFF = {
-  coordinator: {
-    phone: '+917000099001',
-    typed: '70000 99001',
-    name: 'Meena (Coordinator)',
-    role: 'OPS_COORDINATOR',
-  },
-  finance: {
-    phone: '+917000099002',
-    typed: '70000 99002',
-    name: 'Arun (Finance)',
-    role: 'FINANCE',
-  },
-  // A second coordinator, so a test never waits out the 30 s resend cooldown on one number.
-  coordinator2: {
-    phone: '+917000099004',
-    typed: '70000 99004',
-    name: 'Selvi (Coordinator)',
-    role: 'OPS_COORDINATOR',
-  },
-  coordinator3: {
-    phone: '+917000099005',
-    typed: '70000 99005',
-    name: 'Ravi (Coordinator)',
-    role: 'OPS_COORDINATOR',
-  },
-  manager: {
-    phone: '+917000099006',
-    typed: '70000 99006',
-    name: 'Divya (Manager)',
-    role: 'OPS_MANAGER',
-  },
-  content: {
-    phone: '+917000099003',
-    typed: '70000 99003',
-    name: 'Lakshmi (Content)',
-    role: 'CONTENT_ADMIN',
-  },
+/** Made System Admin by BOOTSTRAP_ADMIN_PHONES (playwright.config.ts), not by the test database. */
+export const BOOTSTRAP_ADMIN = {
+  phone: '+917000099099',
+  typed: '70000 99099',
+  name: 'Admin',
+  role: 'SYSTEM_ADMIN',
 } as const;
+
+export type StaffKey =
+  'coordinator' | 'finance' | 'coordinator2' | 'coordinator3' | 'manager' | 'content';
+export interface StaffMember {
+  phone: string;
+  typed: string;
+  name: string;
+  role: string;
+}
+
+/** Staff the test database is prepared with (e2e/prepare.mjs reads the same file). */
+export const STAFF = JSON.parse(
+  readFileSync(path.join(import.meta.dirname, 'staff.json'), 'utf8'),
+) as Record<StaffKey, StaffMember>;
 
 async function latestCode(phone: string): Promise<string> {
   for (let i = 0; i < 50; i++) {
@@ -61,7 +44,7 @@ async function latestCode(phone: string): Promise<string> {
 /** Signs in through the real OTP screens and waits for the landing page. */
 export async function signIn(
   page: Page,
-  who: (typeof STAFF)[keyof typeof STAFF],
+  who: { phone: string; typed: string },
   landing = 'Bookings',
 ) {
   await page.goto('/sign-in');
