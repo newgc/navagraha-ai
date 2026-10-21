@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Admin tool for the server, run through `sudo navagraha <command>` (see setup-server.sh).
+#   grant-role --phone 98765 43210 --role OPS_MANAGER --actor "Your name" [--revoke]
+#   import-temples /path/to/workbook.xlsx --actor "Your name" [--apply]
+#   migrate | seed
+set -euo pipefail
+BASE=/srv/navagraha
+NODE=/opt/navagraha-node/current/bin/node
+set -a; . "$BASE/shared/.env"; set +a
+cmd="${1:-help}"
+shift || true
+cd "$BASE/current"
+case "$cmd" in
+  grant-role) exec "$NODE" packages/db/dist/scripts/grant-role.js "$@" ;;
+  import-temples) exec "$NODE" packages/db/dist/scripts/import-temples.js "$@" ;;
+  migrate) exec "$NODE" packages/db/dist/scripts/migrate.js ;;
+  seed) exec "$NODE" packages/db/dist/scripts/seed.js ;;
+  *) sed -n '2,6p' "$0"; echo "  codes [since]   (recent sign-in codes; staging only)" ;;
+esac

@@ -1,4 +1,5 @@
 import { appendFile } from 'node:fs/promises';
+import { maskPhone } from '@navagraha/domain';
 import { Logger } from '@nestjs/common';
 
 /** Delivers sign-in codes. Implementations sit behind this adapter (FS §2.2, D-11). */
@@ -8,12 +9,15 @@ export interface OtpSender {
 
 export const OTP_SENDER = Symbol('OTP_SENDER');
 
-/** Development only: prints the code to the API log. Refused in production by config. */
+/** Prints the code to the API log. Development and staging only; refused in production by config. */
 export class ConsoleOtpSender implements OtpSender {
   private readonly logger = new Logger('OTP');
 
   async send(phone: string, code: string) {
-    this.logger.warn(`Sign-in code for ${phone}: ${code} (console sender — development only)`);
+    // Never log full phone numbers; the last four digits are enough to match a code to a person.
+    this.logger.warn(
+      `Sign-in code for ${maskPhone(phone)}: ${code} (console sender — no SMS provider yet)`,
+    );
   }
 }
 

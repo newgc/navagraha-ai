@@ -113,6 +113,19 @@ describe.skipIf(!url)('OTP sign-in, sessions and roles', () => {
     expect(r.body.message).toMatch(/Too many codes/);
   });
 
+  it('rate limits use the visitor address the web app forwards, not the server address', async () => {
+    const r = await http()
+      .post('/v1/auth/otp/request')
+      .set('x-forwarded-for', '203.0.113.7')
+      .send({ phone })
+      .expect(202);
+    const [ch] = await db
+      .select()
+      .from(schema.otpChallenge)
+      .where(eq(schema.otpChallenge.id, r.body.challengeId));
+    expect(ch!.requestIp).toBe('203.0.113.7');
+  });
+
   it('validates input', async () => {
     await requestCode('12345').expect(400);
     await http().post('/v1/auth/otp/request').send({}).expect(400);

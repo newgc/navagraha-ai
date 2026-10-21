@@ -11,6 +11,8 @@ describe('loadConfig', () => {
     expect(loadConfig(base)).toEqual({
       ...base,
       NODE_ENV: 'development',
+      DEPLOY_ENV: 'local',
+      API_HOST: '127.0.0.1',
       API_PORT: 4000,
       OTP_SENDER: 'console',
     });
@@ -44,5 +46,19 @@ describe('loadConfig', () => {
       AUTH_SECRET: 'change-me-change-me-change-me-change-me',
     };
     expect(() => loadConfig(prod)).toThrow(/OTP_SENDER.*AUTH_SECRET/s);
+  });
+
+  it('staging may print sign-in codes to the log; production may not', () => {
+    const staging = { ...base, NODE_ENV: 'production', DEPLOY_ENV: 'staging' };
+    expect(loadConfig(staging).OTP_SENDER).toBe('console');
+    expect(() =>
+      loadConfig({ ...staging, OTP_SENDER: 'file', OTP_OUTBOX_FILE: '/tmp/otp' }),
+    ).toThrow(/OTP_SENDER/);
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', DEPLOY_ENV: 'production' })).toThrow(
+      /SMS provider/,
+    );
+    expect(() =>
+      loadConfig({ ...staging, AUTH_SECRET: 'change-me-change-me-change-me-change-me' }),
+    ).toThrow(/AUTH_SECRET/);
   });
 });

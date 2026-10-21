@@ -112,6 +112,12 @@ The itinerary is checked structurally and needs the coordinator's sign-off that 
 timings by hand (D-20). The booking confirms itself, and its Trip is created, as soon as the
 payment condition and every mandatory supplier item are both satisfied (FS §33).
 
+## Staging server
+
+`navagrahaai.newgc.in` runs on the InstaLeads VPS, kept apart from it. Setup, deploys,
+sign-in codes, rollback: [docs/runbooks/staging-server.md](docs/runbooks/staging-server.md).
+Every push to `main` deploys there once CI is green.
+
 ## Checks
 
 ```sh

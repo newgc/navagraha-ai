@@ -31,6 +31,8 @@ export async function createTestApp(url: string) {
 
   const config: AppConfig = {
     NODE_ENV: 'test',
+    DEPLOY_ENV: 'local',
+    API_HOST: '127.0.0.1',
     API_PORT: 0,
     DATABASE_URL: url,
     AUTH_SECRET: 'test-secret-test-secret-test-secret-0000',

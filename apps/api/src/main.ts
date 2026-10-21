@@ -8,7 +8,7 @@ import { APP_CONFIG, type AppConfig } from './config.js';
 async function bootstrap() {
   const app = configureApp(await NestFactory.create<NestExpressApplication>(AppModule));
   const config = app.get<AppConfig>(APP_CONFIG);
-  await app.listen(config.API_PORT);
+  await app.listen(config.API_PORT, config.API_HOST);
 }
 
 void bootstrap();

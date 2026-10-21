@@ -1,5 +1,5 @@
 import 'server-only';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 
 /**
  * Server-side API client. The session token lives in an httpOnly cookie and is only ever
@@ -28,6 +28,10 @@ export async function api<T>(
   } = {},
 ): Promise<ApiResult<T>> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  // Pass on who is really asking: the API trusts these only from loopback (rate limits, audit).
+  const incoming = await headers();
+  const forwardedFor = incoming.get('x-forwarded-for');
+  const userAgent = incoming.get('user-agent');
   let res: Response;
   try {
     res = await fetch(`${API_URL}/v1${path}`, {
@@ -35,6 +39,8 @@ export async function api<T>(
       headers: {
         'content-type': init.raw?.contentType ?? 'application/json',
         ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(forwardedFor ? { 'x-forwarded-for': forwardedFor } : {}),
+        ...(userAgent ? { 'user-agent': userAgent } : {}),
       },
       body: init.raw
         ? (init.raw.bytes as BodyInit)
