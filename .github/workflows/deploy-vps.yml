@@ -6,6 +6,7 @@
 #              DATABASE_URL (Neon), AUTH_SECRET
 #   Variables: VPS_PORT (SSH, default 22), WEB_PORT (default 3100), API_PORT (default 4100),
 #              BOOTSTRAP_ADMIN_PHONES, NODE_HEAP_MB (optional, default 384)
+#   A variable added under Secrets by mistake is read from there too.
 #
 # Builds the same Docker image CI checks and ships its /app folder plus its Node.js binary
 # (Debian 12, like the server), so the server runs exactly what was built and tested.
@@ -71,7 +72,7 @@ jobs:
         with:
           host: ${{ secrets.VPS_HOST }}
           user: ${{ secrets.VPS_USER }}
-          port: ${{ vars.VPS_PORT || '22' }}
+          port: ${{ vars.VPS_PORT || secrets.VPS_PORT || '22' }}
           key: ${{ secrets.VPS_SSH_KEY }}
           known-hosts: ${{ secrets.VPS_KNOWN_HOSTS }}
       - name: Check the connection
@@ -120,10 +121,10 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-          BOOTSTRAP_ADMIN_PHONES: ${{ vars.BOOTSTRAP_ADMIN_PHONES }}
-          WEB_PORT: ${{ vars.WEB_PORT || '3100' }}
-          API_PORT: ${{ vars.API_PORT || '4100' }}
-          NODE_HEAP_MB: ${{ vars.NODE_HEAP_MB || '384' }}
+          BOOTSTRAP_ADMIN_PHONES: ${{ vars.BOOTSTRAP_ADMIN_PHONES || secrets.BOOTSTRAP_ADMIN_PHONES }}
+          WEB_PORT: ${{ vars.WEB_PORT || secrets.WEB_PORT || '3100' }}
+          API_PORT: ${{ vars.API_PORT || secrets.API_PORT || '4100' }}
+          NODE_HEAP_MB: ${{ vars.NODE_HEAP_MB || secrets.NODE_HEAP_MB || '384' }}
         run: |
           # Sent over SSH's stdin, so secrets never appear in a command line on either side.
           python3 - <<'PY' | ssh vps "umask 077; cat > ~/navagraha/shared/env.json.new && mv ~/navagraha/shared/env.json.new ~/navagraha/shared/env.json"
