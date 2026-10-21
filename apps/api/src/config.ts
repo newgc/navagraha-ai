@@ -24,9 +24,10 @@ const EnvSchema = z
     OTP_OUTBOX_FILE: z.string().min(1).optional(),
     /** Hashwa WhatsApp API (D-11). The secret needs the "wa_send" permission. */
     HASHWA_API_URL: z.url().default('https://eco.hashwa.in/api'),
-    WHATSAPP_API_SECRET: z.string().min(1).optional(),
+    // Keys pasted into GitHub secrets often carry a stray space or line break; trim them.
+    WHATSAPP_API_SECRET: z.string().trim().min(1).optional(),
     /** Unique ID of the linked WhatsApp account that sends the codes (Hashwa dashboard). */
-    WHATSAPP_ACCOUNT: z.string().min(1).optional(),
+    WHATSAPP_ACCOUNT: z.string().trim().min(1).optional(),
     /**
      * Phone numbers (comma-separated) that are made System Admin and Operations Manager at
      * startup, so the first admin can sign in on a server with no command line (Lightsail).
@@ -37,9 +38,9 @@ const EnvSchema = z
     PAYMENT_GATEWAY: z.enum(['none', 'cashfree']).default('none'),
     /** `sandbox` takes no real money; only DEPLOY_ENV=production may use `production`. */
     CASHFREE_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
-    CASHFREE_CLIENT_ID: z.string().min(1).optional(),
+    CASHFREE_CLIENT_ID: z.string().trim().min(1).optional(),
     /** Also the key that signs Cashfree's webhooks. */
-    CASHFREE_CLIENT_SECRET: z.string().min(1).optional(),
+    CASHFREE_CLIENT_SECRET: z.string().trim().min(1).optional(),
     CASHFREE_API_VERSION: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)

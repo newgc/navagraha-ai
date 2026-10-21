@@ -85,6 +85,9 @@ describe('loadConfig', () => {
     expect(() => loadConfig(cf)).toThrow(/CASHFREE_CLIENT_ID.*CASHFREE_CLIENT_SECRET/s);
     const keys = { ...cf, CASHFREE_CLIENT_ID: 'id', CASHFREE_CLIENT_SECRET: 'secret' };
     expect(loadConfig(keys).CASHFREE_ENV).toBe('sandbox');
+    expect(
+      loadConfig({ ...keys, CASHFREE_CLIENT_SECRET: ' secret\n' }).CASHFREE_CLIENT_SECRET,
+    ).toBe('secret');
     expect(() => loadConfig({ ...keys, CASHFREE_ENV: 'production' })).toThrow(/DEPLOY_ENV/);
     const prod = {
       ...keys,
