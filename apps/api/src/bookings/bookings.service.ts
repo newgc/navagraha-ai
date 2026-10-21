@@ -11,7 +11,9 @@ import {
   netPaidPaise,
   normalizePhone,
   paymentMachine,
+  type AcceptanceChannel,
   type PaymentConditionPolicy,
+  type SourceChannel,
 } from '@navagraha/domain';
 import {
   BadRequestException,
@@ -42,9 +44,29 @@ import type {
   FulfilmentRequestInput,
   ManualBookingInput,
   OfflinePaymentInput,
+  StopsInput,
 } from './booking.schemas.js';
 
 const { booking, itinerary, quote, payment, fulfilmentComponent: component, trip } = schema;
+
+/** An agreed plan to turn into a booking (see BookingsService.createBooking). */
+export interface BookingPlan {
+  bookerUserId: string;
+  travellers: ManualBookingInput['travellers'];
+  trip: ManualBookingInput['trip'];
+  stops: StopsInput;
+  priced: ReturnType<BookingCore['price']>;
+  validUntil: Date;
+  fulfilment?: z.infer<typeof FulfilmentInput>[];
+  source: { channel: SourceChannel; reference?: string | null };
+  acceptedVia: AcceptanceChannel;
+  /** Who prepared the itinerary, quote and supplier items. */
+  preparer: Actor;
+  /** Who agreed to it and so created the booking: the coordinator on the phone, or the customer. */
+  acceptor: Actor;
+  correlationId: string;
+  auditAction: string;
+}
 
 const asActor = (auth: AuthContext): Actor => ({
   userId: auth.userId,
@@ -68,26 +90,15 @@ export class BookingsService {
   // ---------------------------------------------------------------- create
 
   async createManual(input: ManualBookingInput, auth: AuthContext, correlationId: string) {
-    const actor = asActor(auth);
-    const sys = systemActor(auth.userId);
-    const opts = { correlationId, sourceChannel: input.source.channel };
-
     const phone = normalizePhone(input.booker.phone);
     if (!phone) throw new BadRequestException('booker.phone: enter a valid mobile number');
     if (new Date(input.quote.validUntil) <= new Date()) {
       throw new BadRequestException('quote.validUntil must be in the future');
     }
     const priced = this.core.price(input.quote.lines);
+    const actor = asActor(auth);
 
     const bookingId = await this.db.transaction(async (tx) => {
-      const [circ] = await tx
-        .select()
-        .from(schema.circuit)
-        .where(eq(schema.circuit.code, input.trip.circuitCode));
-      if (!circ) throw new BadRequestException(`Unknown circuit ${input.trip.circuitCode}`);
-      const circuitTemples = await this.core.circuitTemples(tx, circ.id);
-      const templeIdByCode = new Map(circuitTemples.map((t) => [t.code, t.id]));
-
       // Booker: the phone number is the identity (MR-01).
       await tx
         .insert(schema.appUser)
@@ -113,128 +124,164 @@ export class BookingsService {
         .values({ userId: booker.id, role: 'CUSTOMER' })
         .onConflictDoNothing();
 
-      const travellers = await this.core.resolveTravellers(tx, booker.id, input.travellers);
-
-      const fulfilment: z.infer<typeof FulfilmentInput>[] = input.fulfilment ?? [
-        { slot: 'vehicle', kind: 'VEHICLE', mandatory: true },
-        ...(input.trip.template === '2D1N'
-          ? [{ slot: 'hotel:night-1', kind: 'HOTEL' as const, mandatory: true }]
-          : []),
-      ];
-      if (new Set(fulfilment.map((f) => f.slot)).size !== fulfilment.length) {
-        throw new BadRequestException('fulfilment: each slot must be unique');
-      }
-      const seats = fulfilment
-        .filter((f) => f.kind === 'VEHICLE' && f.capacity)
-        .map((f) => f.capacity!);
-
-      // D-20 structural check; the coordinator's sign-off is enforced by the input schema.
-      const check = this.core.checkItinerary({
-        template: input.trip.template,
-        startDate: input.trip.startDate,
-        circuitTempleCodes: circuitTemples.map((t) => t.code),
-        stops: input.itinerary.stops,
-        travellerCount: travellers.length,
-        vehicleSeats: seats.length ? seats.reduce((a, b) => a + b, 0) : null,
-      });
-
-      const seniorFriendly =
-        input.trip.seniorFriendly ?? travellers.some((t) => t.ageBand.startsWith('SENIOR'));
-      const id = randomUUID();
-      await tx.insert(booking).values({
-        id,
-        state: 'REQUESTED',
+      return this.createBooking(tx, {
         bookerUserId: booker.id,
-        circuitId: circ.id,
-        startDate: input.trip.startDate,
-        template: input.trip.template,
-        mode: input.trip.mode,
-        seniorFriendly,
-        tier: input.trip.tier ?? null,
-        pickupLocation: input.trip.pickupLocation ?? null,
-        pickupTime: input.trip.pickupTime ?? null,
-        sourceChannel: input.source.channel,
-        sourceReference: input.source.reference ?? null,
-        notes: input.trip.notes ?? null,
-        createdByUserId: auth.userId,
-      });
-      await tx
-        .insert(schema.bookingTraveller)
-        .values(travellers.map((t) => ({ bookingId: id, travellerId: t.id, isLead: t.isLead })));
-
-      // Itinerary v1 and quote v1, both accepted by the customer on the phone.
-      const ctx = { actor, correlationId, sourceChannel: input.source.channel };
-      const itineraryId = await this.core.createItinerary(tx, ctx, {
-        bookingId: id,
-        version: 1,
-        parentId: null,
-        origin: 'MANUAL',
+        travellers: input.travellers,
+        trip: input.trip,
         stops: input.itinerary.stops,
-        templeIdByCode,
-        warnings: check.warnings,
-        acceptedVia: input.quote.acceptedVia,
-      });
-      const quoteId = await this.core.createQuote(tx, ctx, {
-        bookingId: id,
-        version: 1,
         priced,
         validUntil: new Date(input.quote.validUntil),
+        fulfilment: input.fulfilment,
+        source: input.source,
         acceptedVia: input.quote.acceptedVia,
+        preparer: actor,
+        acceptor: actor,
+        correlationId,
+        auditAction: 'booking.manual_created',
       });
-
-      // Booking: REQUESTED (quote is LOCKED) → PENDING_CONFIRMATION.
-      await tx
-        .update(booking)
-        .set({ activeItineraryId: itineraryId, activeQuoteId: quoteId })
-        .where(eq(booking.id, id));
-      await this.transitions.created(tx, bookingMachine, id, 'REQUESTED', actor, opts);
-      await this.transitions.move(
-        tx,
-        bookingMachine,
-        id,
-        'REQUESTED',
-        'PENDING_CONFIRMATION',
-        sys,
-        opts,
-      );
-
-      for (const f of fulfilment) {
-        const componentId = randomUUID();
-        await tx.insert(component).values({
-          id: componentId,
-          bookingId: id,
-          slot: f.slot,
-          kind: f.kind,
-          mandatory: f.mandatory,
-          state: 'PENDING',
-          description: f.description ?? null,
-          supplierName: f.supplierName ?? null,
-          capacity: f.capacity ?? null,
-        });
-        await this.transitions.created(
-          tx,
-          fulfilmentComponentMachine,
-          componentId,
-          'PENDING',
-          actor,
-          opts,
-        );
-      }
-
-      await this.audit.record(
-        {
-          action: 'booking.manual_created',
-          correlationId,
-          actorUserId: auth.userId,
-          entityType: 'booking',
-          entityId: id,
-          metadata: { channel: input.source.channel, totalPaise: priced.totalPaise },
-        },
-        tx,
-      );
-      return id;
     });
     return this.detail(bookingId);
+  }
+
+  /**
+   * Builds a booking from an agreed plan: travellers, itinerary v1 and quote v1 (accepted),
+   * the booking (REQUESTED → PENDING_CONFIRMATION) and its supplier items. Used by concierge
+   * bookings (the coordinator both prepares and records acceptance) and by web proposals (the
+   * coordinator prepared it, the customer accepts). Runs inside the caller's transaction.
+   */
+  async createBooking(tx: Tx, plan: BookingPlan) {
+    const { preparer, acceptor, correlationId } = plan;
+    const sys = systemActor(acceptor.userId);
+    const opts = { correlationId, sourceChannel: plan.source.channel };
+
+    const [circ] = await tx
+      .select()
+      .from(schema.circuit)
+      .where(eq(schema.circuit.code, plan.trip.circuitCode));
+    if (!circ) throw new BadRequestException(`Unknown circuit ${plan.trip.circuitCode}`);
+    const circuitTemples = await this.core.circuitTemples(tx, circ.id);
+    const templeIdByCode = new Map(circuitTemples.map((t) => [t.code, t.id]));
+
+    const travellers = await this.core.resolveTravellers(tx, plan.bookerUserId, plan.travellers);
+
+    const fulfilment: z.infer<typeof FulfilmentInput>[] = plan.fulfilment ?? [
+      { slot: 'vehicle', kind: 'VEHICLE', mandatory: true },
+      ...(plan.trip.template === '2D1N'
+        ? [{ slot: 'hotel:night-1', kind: 'HOTEL' as const, mandatory: true }]
+        : []),
+    ];
+    if (new Set(fulfilment.map((f) => f.slot)).size !== fulfilment.length) {
+      throw new BadRequestException('fulfilment: each slot must be unique');
+    }
+    const seats = fulfilment
+      .filter((f) => f.kind === 'VEHICLE' && f.capacity)
+      .map((f) => f.capacity!);
+
+    // D-20 structural check (again at acceptance: the date may have passed since).
+    const check = this.core.checkItinerary({
+      template: plan.trip.template,
+      startDate: plan.trip.startDate,
+      circuitTempleCodes: circuitTemples.map((t) => t.code),
+      stops: plan.stops,
+      travellerCount: travellers.length,
+      vehicleSeats: seats.length ? seats.reduce((a, b) => a + b, 0) : null,
+    });
+
+    const seniorFriendly =
+      plan.trip.seniorFriendly ?? travellers.some((t) => t.ageBand.startsWith('SENIOR'));
+    const id = randomUUID();
+    await tx.insert(booking).values({
+      id,
+      state: 'REQUESTED',
+      bookerUserId: plan.bookerUserId,
+      circuitId: circ.id,
+      startDate: plan.trip.startDate,
+      template: plan.trip.template,
+      mode: plan.trip.mode,
+      seniorFriendly,
+      tier: plan.trip.tier ?? null,
+      pickupLocation: plan.trip.pickupLocation ?? null,
+      pickupTime: plan.trip.pickupTime ?? null,
+      sourceChannel: plan.source.channel,
+      sourceReference: plan.source.reference ?? null,
+      notes: plan.trip.notes ?? null,
+      createdByUserId: preparer.userId,
+    });
+    await tx
+      .insert(schema.bookingTraveller)
+      .values(travellers.map((t) => ({ bookingId: id, travellerId: t.id, isLead: t.isLead })));
+
+    // Itinerary v1 and quote v1: prepared by operations, accepted by the customer.
+    const ctx = { actor: preparer, acceptor, correlationId, sourceChannel: plan.source.channel };
+    const itineraryId = await this.core.createItinerary(tx, ctx, {
+      bookingId: id,
+      version: 1,
+      parentId: null,
+      origin: 'MANUAL',
+      stops: plan.stops,
+      templeIdByCode,
+      warnings: check.warnings,
+      acceptedVia: plan.acceptedVia,
+    });
+    const quoteId = await this.core.createQuote(tx, ctx, {
+      bookingId: id,
+      version: 1,
+      priced: plan.priced,
+      validUntil: plan.validUntil,
+      acceptedVia: plan.acceptedVia,
+    });
+
+    // Booking: REQUESTED (quote is LOCKED) → PENDING_CONFIRMATION.
+    await tx
+      .update(booking)
+      .set({ activeItineraryId: itineraryId, activeQuoteId: quoteId })
+      .where(eq(booking.id, id));
+    await this.transitions.created(tx, bookingMachine, id, 'REQUESTED', acceptor, opts);
+    await this.transitions.move(
+      tx,
+      bookingMachine,
+      id,
+      'REQUESTED',
+      'PENDING_CONFIRMATION',
+      sys,
+      opts,
+    );
+
+    for (const f of fulfilment) {
+      const componentId = randomUUID();
+      await tx.insert(component).values({
+        id: componentId,
+        bookingId: id,
+        slot: f.slot,
+        kind: f.kind,
+        mandatory: f.mandatory,
+        state: 'PENDING',
+        description: f.description ?? null,
+        supplierName: f.supplierName ?? null,
+        capacity: f.capacity ?? null,
+      });
+      await this.transitions.created(
+        tx,
+        fulfilmentComponentMachine,
+        componentId,
+        'PENDING',
+        preparer,
+        opts,
+      );
+    }
+
+    await this.audit.record(
+      {
+        action: plan.auditAction,
+        correlationId,
+        actorUserId: acceptor.userId,
+        entityType: 'booking',
+        entityId: id,
+        metadata: { channel: plan.source.channel, totalPaise: plan.priced.totalPaise },
+      },
+      tx,
+    );
+    return id;
   }
 
   // ---------------------------------------------------------------- read

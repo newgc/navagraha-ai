@@ -419,3 +419,18 @@ h3 {
   padding: 0.1rem 0.5rem;
   font-size: 0.75rem;
 }
+
+/* Self-service: the trip request form and the customer's plan. */
+.plan-form .traveller {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.lines {
+  width: 100%;
+}
+.lines td,
+.lines th {
+  padding: 0.25rem 0;
+}

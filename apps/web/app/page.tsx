@@ -14,7 +14,7 @@ export default function Home() {
         Plan My Pilgrimage
       </Link>
       <p className="small">
-        <Link href="/sign-in">Staff sign in</Link>
+        <Link href="/trips">My trips</Link> · <Link href="/sign-in">Staff sign in</Link>
       </p>
     </main>
   );

@@ -181,3 +181,28 @@ export function toChangeProposalPayload(
     },
   };
 }
+
+/** POST /v1/trip-requests/{ref}/proposals body: a complete plan and price for a web request. */
+export function toLeadProposalPayload(
+  f: BookingFormState,
+): { ok: true; payload: Record<string, unknown> } | { ok: false; errors: string[] } {
+  const built = toManualBookingPayload(f);
+  if (!built.ok) return built;
+  const p = built.payload as {
+    trip: Record<string, unknown>;
+    travellers: unknown[];
+    itinerary: unknown;
+    quote: { lines: unknown[]; validUntil: string };
+    fulfilment: unknown[];
+  };
+  return {
+    ok: true,
+    payload: {
+      trip: p.trip,
+      travellers: p.travellers,
+      itinerary: p.itinerary,
+      quote: { lines: p.quote.lines, validUntil: p.quote.validUntil },
+      fulfilment: p.fulfilment,
+    },
+  };
+}

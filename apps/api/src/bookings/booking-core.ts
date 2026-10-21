@@ -65,6 +65,8 @@ export function refundablePaise(payments: readonly PaymentRow[]) {
 
 interface Ctx {
   actor: Actor;
+  /** Who accepts the itinerary and quote when not the preparer (the customer on the web). */
+  acceptor?: Actor;
   correlationId: string;
   sourceChannel?: string;
 }
@@ -238,10 +240,18 @@ export class BookingCore {
   }
 
   async acceptItinerary(tx: Tx, ctx: Ctx, id: string, via: AcceptanceChannel) {
-    await this.transitions.move(tx, itineraryMachine, id, 'PROPOSED', 'ACCEPTED', ctx.actor, {
-      correlationId: ctx.correlationId,
-      reason: `Accepted by the customer via ${via.toLowerCase().replace('_', ' ')}`,
-    });
+    await this.transitions.move(
+      tx,
+      itineraryMachine,
+      id,
+      'PROPOSED',
+      'ACCEPTED',
+      ctx.acceptor ?? ctx.actor,
+      {
+        correlationId: ctx.correlationId,
+        reason: `Accepted by the customer via ${via.toLowerCase().replace('_', ' ')}`,
+      },
+    );
   }
 
   /** A new quote version: DRAFT → CALCULATED (system) → PRESENTED, and LOCKED when accepted. */
@@ -298,10 +308,18 @@ export class BookingCore {
   }
 
   async lockQuote(tx: Tx, ctx: Ctx, id: string, via: AcceptanceChannel) {
-    await this.transitions.move(tx, quoteMachine, id, 'PRESENTED', 'LOCKED', ctx.actor, {
-      correlationId: ctx.correlationId,
-      reason: `Accepted by the customer via ${via.toLowerCase().replace('_', ' ')}`,
-    });
+    await this.transitions.move(
+      tx,
+      quoteMachine,
+      id,
+      'PRESENTED',
+      'LOCKED',
+      ctx.acceptor ?? ctx.actor,
+      {
+        correlationId: ctx.correlationId,
+        reason: `Accepted by the customer via ${via.toLowerCase().replace('_', ' ')}`,
+      },
+    );
     await tx.update(quote).set({ lockedAt: new Date(), acceptedVia: via }).where(eq(quote.id, id));
   }
 

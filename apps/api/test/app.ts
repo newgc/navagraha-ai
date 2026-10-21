@@ -61,7 +61,9 @@ export async function createTestApp(
   if (fakes.whatsapp) builder = builder.overrideProvider(WHATSAPP).useValue(fakes.whatsapp);
   const moduleRef = await builder.compile();
   const app = configureApp(
-    moduleRef.createNestApplication<NestExpressApplication>({ logger: false }),
+    moduleRef.createNestApplication<NestExpressApplication>({
+      logger: process.env.TEST_LOGS ? undefined : false,
+    }),
   );
   await app.init();
 

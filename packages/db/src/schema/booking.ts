@@ -13,6 +13,7 @@ import {
   changeRequestMachine,
   fulfilmentComponentMachine,
   itineraryMachine,
+  leadMachine,
   paymentMachine,
   quoteMachine,
   refundMachine,
@@ -441,4 +442,70 @@ export const gatewayEvent = pgTable(
     error: text('error'),
   },
   (t) => [uniqueIndex('gateway_event_key_uq').on(t.provider, t.eventKey)],
+);
+
+export const leadState = pgEnum('lead_state', states(leadMachine));
+export const leadReferenceSeq = pgSequence('lead_reference_seq', { startWith: 1001 });
+
+/**
+ * A customer's trip request from the website (FS §8.1 TripRequest, D-04 §3 Lead). Operations
+ * plan and price it as proposals; the customer accepts one and it becomes a booking.
+ */
+export const lead = pgTable(
+  'lead',
+  {
+    id: id(),
+    /** Human reference for the customer and the team, e.g. REQ-001001. */
+    reference: text('reference')
+      .notNull()
+      .default(sql`'REQ-' || lpad(nextval('lead_reference_seq')::text, 6, '0')`),
+    state: leadState('state').notNull(),
+    customerUserId: uuid('customer_user_id')
+      .notNull()
+      .references(() => appUser.id),
+    sourceChannel: sourceChannel('source_channel').notNull(),
+    /** The validated TripRequest exactly as the customer sent it. */
+    request: jsonb('request').notNull(),
+    startDate: date('start_date').notNull(),
+    lostReason: text('lost_reason'),
+    acceptedProposalId: uuid('accepted_proposal_id'),
+    bookingId: uuid('booking_id').references(() => booking.id),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex('lead_reference_uq').on(t.reference),
+    index('lead_customer_idx').on(t.customerUserId),
+  ],
+);
+
+/**
+ * One immutable plan and price sent to the customer (itinerary, quote lines, supplier items).
+ * A revision is a new version; the newest one that has not expired can be accepted. Nothing
+ * here is a booking until the customer accepts (D-04 §2.1: a booking needs a LOCKED quote).
+ */
+export const leadProposal = pgTable(
+  'lead_proposal',
+  {
+    id: id(),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => lead.id),
+    version: smallint('version').notNull(),
+    /** { trip, travellers, itinerary: { stops }, quote: { lines }, fulfilment } */
+    plan: jsonb('plan').notNull(),
+    subtotalPaise: integer('subtotal_paise').notNull(),
+    taxPaise: integer('tax_paise').notNull(),
+    totalPaise: integer('total_paise').notNull(),
+    validUntil: timestamp('valid_until', { withTimezone: true }).notNull(),
+    /** D-20: structural check warnings and the coordinator who checked timings. */
+    validation: jsonb('validation').notNull(),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => appUser.id),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex('lead_proposal_version_uq').on(t.leadId, t.version),
+    check('lead_proposal_total_chk', sql`${t.totalPaise} = ${t.subtotalPaise} + ${t.taxPaise}`),
+  ],
 );

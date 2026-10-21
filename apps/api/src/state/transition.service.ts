@@ -37,6 +37,7 @@ const TABLES: Record<string, string> = {
   ChangeRequest: 'change_request',
   Cancellation: 'cancellation',
   Refund: 'refund',
+  Lead: 'lead',
 };
 
 interface Options {

@@ -34,5 +34,11 @@
     "typed": "70000 99003",
     "name": "Lakshmi (Content)",
     "role": "CONTENT_ADMIN"
+  },
+  "planner": {
+    "phone": "+917000099008",
+    "typed": "70000 99008",
+    "name": "Kavya (Coordinator)",
+    "role": "OPS_COORDINATOR"
   }
 }

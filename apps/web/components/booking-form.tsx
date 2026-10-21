@@ -1,10 +1,16 @@
 'use client';
 
-import { ACCEPTANCE_CHANNELS, MODES, QUOTE_LINE_KINDS, SOURCE_CHANNELS } from '@navagraha/domain';
+import {
+  STAFF_ACCEPTANCE_CHANNELS,
+  MODES,
+  QUOTE_LINE_KINDS,
+  SOURCE_CHANNELS,
+} from '@navagraha/domain';
 import { useState, useTransition } from 'react';
 import {
   previewTotalPaise,
   toChangeProposalPayload,
+  toLeadProposalPayload,
   toManualBookingPayload,
   type BookingFormState,
   type LineRow,
@@ -48,7 +54,7 @@ export function BookingForm({
   submitLabel = 'Create booking',
 }: {
   temples: Temple[];
-  mode?: 'new' | 'change';
+  mode?: 'new' | 'change' | 'proposal';
   initial?: Partial<BookingFormState>;
   submit: (payload: Record<string, unknown>) => Promise<CreateResult>;
   submitLabel?: string;
@@ -111,7 +117,12 @@ export function BookingForm({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const built = mode === 'change' ? toChangeProposalPayload(f) : toManualBookingPayload(f);
+    const built =
+      mode === 'change'
+        ? toChangeProposalPayload(f)
+        : mode === 'proposal'
+          ? toLeadProposalPayload(f)
+          : toManualBookingPayload(f);
     if (!built.ok) {
       setProblems(built.errors);
       return;
@@ -473,7 +484,7 @@ export function BookingForm({
             <label>
               Customer accepted via
               <select value={f.acceptedVia} onChange={(e) => set('acceptedVia', e.target.value)}>
-                {ACCEPTANCE_CHANNELS.map((c) => (
+                {STAFF_ACCEPTANCE_CHANNELS.map((c) => (
                   <option key={c} value={c}>
                     {humanize(c)}
                   </option>
@@ -518,6 +529,11 @@ export function BookingForm({
             </>
           )}
         </div>
+      )}
+      {!result.error && problems.length === 0 && result.notice && (
+        <p role="status" className="notice">
+          {result.notice}
+        </p>
       )}
       <button type="submit" disabled={pending}>
         {pending ? 'Working…' : submitLabel}

@@ -22,6 +22,7 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
         </Link>
         <nav>
           {staffRoles.some((r) => BOOKING_ROLES.includes(r)) && <Link href="/ops">Bookings</Link>}
+          {canCreate && <Link href="/ops/requests">Trip requests</Link>}
           {canCreate && <Link href="/ops/bookings/new">New booking</Link>}
           {staffRoles.some((r) => TEMPLE_DATA_ROLES.includes(r)) && (
             <Link href="/ops/temples">Temple data</Link>

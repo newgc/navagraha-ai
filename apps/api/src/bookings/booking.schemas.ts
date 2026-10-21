@@ -1,5 +1,5 @@
 import {
-  ACCEPTANCE_CHANNELS,
+  STAFF_ACCEPTANCE_CHANNELS,
   CHANGE_KINDS,
   FULFILMENT_KINDS,
   MODES,
@@ -8,6 +8,7 @@ import {
   OFFLINE_REFUND_METHODS,
   SOURCE_CHANNELS,
   TEMPLATES,
+  TRIP_PURPOSES,
 } from '@navagraha/domain';
 import { z } from 'zod';
 
@@ -132,7 +133,7 @@ export const ManualBookingInput = z.object({
   quote: z.object({
     lines: QuoteLines,
     validUntil: z.iso.datetime({ offset: true }),
-    acceptedVia: z.enum(ACCEPTANCE_CHANNELS),
+    acceptedVia: z.enum(STAFF_ACCEPTANCE_CHANNELS),
   }),
   /** Supplier items. Defaults: a vehicle, plus a hotel night for 2D/1N — all mandatory. */
   fulfilment: z.array(FulfilmentInput).min(1).max(30).optional(),
@@ -203,7 +204,7 @@ export const ChangeProposalInput = z.object({
 });
 export type ChangeProposalInput = z.infer<typeof ChangeProposalInput>;
 
-export const AcceptInput = z.object({ acceptedVia: z.enum(ACCEPTANCE_CHANNELS) });
+export const AcceptInput = z.object({ acceptedVia: z.enum(STAFF_ACCEPTANCE_CHANNELS) });
 
 export const CancellationInput = z.object({
   reason: text(2000),
@@ -222,3 +223,55 @@ export const RefundInput = z.object({
   reference: text(200),
   paidOn: isoDate,
 });
+
+/**
+ * POST /v1/trip-requests — what a customer asks for on the website (FS §8.1 TripRequest).
+ * The phone number is the signed-in customer's own, verified by a WhatsApp code.
+ */
+export const TripRequestInput = z.object({
+  startDate: isoDate,
+  flexibleDates: z.boolean().optional(),
+  /** 1 day, 2 days / 1 night, or let the team recommend (NAV-AI-005). */
+  days: z.enum(['1', '2', 'RECOMMEND']),
+  pickup: z.object({ location: text(500), time: hhmm.optional() }),
+  travellers: z
+    .array(
+      NewTraveller.pick({
+        fullName: true,
+        ageBand: true,
+        relationshipToBooker: true,
+        needsWheelchair: true,
+        mobilityNotes: true,
+        foodPreference: true,
+      }),
+    )
+    .min(1)
+    .max(20),
+  purpose: z.enum(TRIP_PURPOSES),
+  hotelRequired: z.boolean().optional(),
+  notes: z.string().max(2000).optional(),
+  contact: z.object({ name: text(120), email: z.email().optional() }),
+});
+export type TripRequestInput = z.infer<typeof TripRequestInput>;
+
+/** POST /v1/trip-requests/{ref}/proposals — a complete plan and price for the customer. */
+export const LeadProposalInput = z.object({
+  trip: z.object({
+    circuitCode: z.string().default('NAVAGRAHA'),
+    startDate: isoDate,
+    template: z.enum(TEMPLATES),
+    mode: z.enum(MODES),
+    seniorFriendly: z.boolean().optional(),
+    tier: z.string().max(40).optional(),
+    pickupLocation: z.string().max(500).optional(),
+    pickupTime: hhmm.optional(),
+    notes: z.string().max(4000).optional(),
+  }),
+  travellers: z.array(NewTraveller).min(1).max(50),
+  itinerary: z.object({ stops: Stops, timingsCheckedByCoordinator: SignOff }),
+  quote: z.object({ lines: QuoteLines, validUntil: z.iso.datetime({ offset: true }) }),
+  fulfilment: z.array(FulfilmentInput).min(1).max(30).optional(),
+});
+export type LeadProposalInput = z.infer<typeof LeadProposalInput>;
+
+export const AcceptProposalInput = z.object({ version: z.number().int().min(1) });

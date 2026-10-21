@@ -84,7 +84,9 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
     input: { amountPaise?: number },
     auth: AuthContext,
     correlationId: string,
-  ): Promise<{ paymentId: string; delivery: LinkDelivery; deliveryError?: string }> {
+    /** The customer paying on the website is sent straight to the link instead. */
+    options: { notify?: boolean } = {},
+  ): Promise<{ paymentId: string; url: string; delivery: LinkDelivery; deliveryError?: string }> {
     const gateway = this.requireGateway();
     const expiresAt = new Date(Date.now() + this.config.PAYMENT_LINK_EXPIRY_HOURS * 3_600_000);
 
@@ -172,7 +174,7 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
     }
     await this.db.update(payment).set({ gatewayLinkUrl: url }).where(eq(payment.id, paymentId));
 
-    if (!this.whatsapp) return { paymentId, delivery: 'NOT_SENT' };
+    if (!this.whatsapp || options.notify === false) return { paymentId, url, delivery: 'NOT_SENT' };
     const rupees = (amountPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 });
     const until = expiresAt.toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -198,7 +200,7 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
         entityId: paymentId,
         metadata: { channel: 'WHATSAPP', error: message },
       });
-      return { paymentId, delivery: 'NOT_SENT', deliveryError: message };
+      return { paymentId, url, delivery: 'NOT_SENT', deliveryError: message };
     }
     await this.audit.record({
       action: 'payment.link_sent',
@@ -208,7 +210,7 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
       entityId: paymentId,
       metadata: { channel: 'WHATSAPP', to: maskPhone(booker.phone) },
     });
-    return { paymentId, delivery: 'WHATSAPP' };
+    return { paymentId, url, delivery: 'WHATSAPP' };
   }
 
   private async failLink(

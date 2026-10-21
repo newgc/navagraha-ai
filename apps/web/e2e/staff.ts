@@ -15,7 +15,7 @@ export const BOOTSTRAP_ADMIN = {
 } as const;
 
 export type StaffKey =
-  'coordinator' | 'finance' | 'coordinator2' | 'coordinator3' | 'manager' | 'content';
+  'coordinator' | 'finance' | 'coordinator2' | 'coordinator3' | 'manager' | 'content' | 'planner';
 export interface StaffMember {
   phone: string;
   typed: string;
@@ -28,7 +28,7 @@ export const STAFF = JSON.parse(
   readFileSync(path.join(import.meta.dirname, 'staff.json'), 'utf8'),
 ) as Record<StaffKey, StaffMember>;
 
-async function latestCode(phone: string): Promise<string> {
+export async function latestCode(phone: string): Promise<string> {
   for (let i = 0; i < 50; i++) {
     const lines = (await readFile(OTP_OUTBOX, 'utf8'))
       .trim()

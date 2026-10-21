@@ -1,4 +1,4 @@
-import { ACCEPTANCE_CHANNELS, CHANGE_KINDS, SOURCE_CHANNELS } from '@navagraha/domain';
+import { STAFF_ACCEPTANCE_CHANNELS, CHANGE_KINDS, SOURCE_CHANNELS } from '@navagraha/domain';
 import Link from 'next/link';
 import { ActionForm } from '@/components/action-form';
 import { Badge } from '@/components/badge';
@@ -174,7 +174,7 @@ export function ChangesPanel(props: {
                   label="Customer accepted — apply change"
                   inline
                 >
-                  <Via name="acceptedVia" choices={ACCEPTANCE_CHANNELS} />
+                  <Via name="acceptedVia" choices={STAFF_ACCEPTANCE_CHANNELS} />
                 </ActionForm>
               )}
               <ActionForm

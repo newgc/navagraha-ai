@@ -25,9 +25,11 @@ export async function api<T>(
     method?: 'GET' | 'POST';
     body?: unknown;
     raw?: { bytes: Uint8Array; contentType: string };
+    /** A session token just issued in this request (its cookie is not readable yet). */
+    token?: string;
   } = {},
 ): Promise<ApiResult<T>> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  const token = init.token ?? (await cookies()).get(SESSION_COOKIE)?.value;
   // Pass on who is really asking: the API trusts these only from loopback (rate limits, audit).
   const incoming = await headers();
   const forwardedFor = incoming.get('x-forwarded-for');

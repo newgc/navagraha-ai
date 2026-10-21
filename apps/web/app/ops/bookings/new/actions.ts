@@ -6,6 +6,8 @@ import { api, errorText, type ApiError } from '@/lib/api';
 export interface CreateResult {
   error?: string;
   findings?: ApiError['errors'];
+  /** Shown after success when the page stays, e.g. "Proposal v2 sent". */
+  notice?: string;
 }
 
 export async function createBooking(payload: Record<string, unknown>): Promise<CreateResult> {

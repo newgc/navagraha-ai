@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { SESSION_COOKIE, api, errorText } from '@/lib/api';
+import { SESSION_COOKIE, STAFF_ROLES, api, errorText, type Me } from '@/lib/api';
 
 export interface SignInState {
   step: 'phone' | 'code';
@@ -53,7 +53,10 @@ export async function verifyCode(prev: SignInState, form: FormData): Promise<Sig
     path: '/',
     expires: new Date(r.data.expiresAt),
   });
-  redirect('/ops');
+  // Staff go to the operations console; customers to their trips.
+  const me = await api<Me>('/me', { token: r.data.token });
+  const staff = me.ok && me.data.roles.some((role) => STAFF_ROLES.includes(role));
+  redirect(staff ? '/ops' : '/trips');
 }
 
 export async function signOut() {

@@ -45,8 +45,20 @@ export const QUOTE_LINE_KINDS = [
 ] as const;
 export type QuoteLineKind = (typeof QUOTE_LINE_KINDS)[number];
 
-export const ACCEPTANCE_CHANNELS = ['PHONE', 'WHATSAPP', 'IN_PERSON', 'EMAIL'] as const;
+export const ACCEPTANCE_CHANNELS = ['PHONE', 'WHATSAPP', 'IN_PERSON', 'EMAIL', 'WEB'] as const;
 export type AcceptanceChannel = (typeof ACCEPTANCE_CHANNELS)[number];
+/** What staff may record as how the customer agreed; WEB only comes from the customer's own click. */
+export const STAFF_ACCEPTANCE_CHANNELS = ['PHONE', 'WHATSAPP', 'IN_PERSON', 'EMAIL'] as const;
+
+/** Why the pilgrimage is made (FS §8.1 TripRequest.purpose). */
+export const TRIP_PURPOSES = [
+  'ALL_NINE',
+  'PARIHARAM',
+  'PEACEFUL_DARSHAN',
+  'FAMILY',
+  'OTHER',
+] as const;
+export type TripPurpose = (typeof TRIP_PURPOSES)[number];
 
 /** What a change request is about (FS §32 change-request, EC-19/20/27/28). */
 export const CHANGE_KINDS = ['DATE', 'TRAVELLERS', 'ITINERARY', 'PRICE', 'OTHER'] as const;

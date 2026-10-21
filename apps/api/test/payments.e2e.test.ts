@@ -178,7 +178,11 @@ describe.skipIf(!url)('payment links through the gateway (D-11, MR-19, EC-25)', 
     const b = await newBooking();
     await sendLink(b.reference).set(customer.header).expect(403);
     const r = await sendLink(b.reference).expect(201);
-    expect(r.body.linkDelivery).toEqual({ paymentId: expect.any(String), delivery: 'WHATSAPP' });
+    expect(r.body.linkDelivery).toEqual({
+      paymentId: expect.any(String),
+      url: expect.stringContaining('cashfree.com'),
+      delivery: 'WHATSAPP',
+    });
     const item = r.body.payment.items[0];
     expect(item).toMatchObject({
       state: 'PENDING',
