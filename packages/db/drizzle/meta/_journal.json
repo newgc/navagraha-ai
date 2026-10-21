@@ -36,6 +36,13 @@
       "when": 1792514524083,
       "tag": "0004_changes_cancellations_refunds",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792590311349,
+      "tag": "0005_payment_gateway",
+      "breakpoints": true
     }
   ]
 }

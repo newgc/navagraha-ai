@@ -43,6 +43,52 @@ export async function rejectPayment(
   return call(reference, `/payments/${paymentId}/reject`, { reason: field(form, 'reason') });
 }
 
+/** D-11 — a gateway payment link for the balance (or a part of it), sent on WhatsApp. */
+export async function sendPaymentLink(
+  reference: string,
+  _: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const amountText = field(form, 'amount');
+  const amountPaise = amountText ? parseRupees(amountText) : undefined;
+  if (amountText && !amountPaise) return { error: 'Enter the amount, e.g. 6495 or 6495.50' };
+  const r = await api<{
+    linkDelivery: { delivery: 'WHATSAPP' | 'NOT_SENT'; deliveryError?: string };
+  }>(`/bookings/${reference}/payments/link`, {
+    method: 'POST',
+    body: amountPaise ? { amountPaise } : {},
+  });
+  if (!r.ok) return { error: errorText(r.error) };
+  revalidatePath(`/ops/bookings/${reference}`);
+  const d = r.data.linkDelivery;
+  return {
+    done: true,
+    notice:
+      d.delivery === 'WHATSAPP'
+        ? 'Payment link sent to the booker on WhatsApp.'
+        : `Link created but not sent on WhatsApp${d.deliveryError ? ` (${d.deliveryError})` : ''} — copy it from the list above and send it yourself.`,
+  };
+}
+
+/** MR-19 — ask the gateway now instead of waiting for its notification. */
+export async function checkPaymentLink(
+  reference: string,
+  paymentId: string,
+  _: ActionState,
+  _form: FormData,
+) {
+  return call(reference, `/payments/${paymentId}/reconcile`, {});
+}
+
+export async function cancelPaymentLink(
+  reference: string,
+  paymentId: string,
+  _: ActionState,
+  _form: FormData,
+) {
+  return call(reference, `/payments/${paymentId}/cancel-link`, {});
+}
+
 export async function waiveBalance(reference: string, _: ActionState, form: FormData) {
   return call(reference, `/bookings/${reference}/payments/waive`, {
     reason: field(form, 'reason'),

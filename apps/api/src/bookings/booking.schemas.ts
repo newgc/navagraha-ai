@@ -148,6 +148,11 @@ export const OfflinePaymentInput = z.object({
 
 export const ReasonInput = z.object({ reason: text(1000) });
 
+/** D-11 payment link; without an amount the link is for the whole balance still due. */
+export const PaymentLinkInput = z.object({
+  amountPaise: z.number().int().positive().max(1_00_00_000_00).optional(),
+});
+
 export const FulfilmentRequestInput = z.object({
   supplierName: z.string().trim().min(1).max(200).optional(),
   notes: z.string().max(1000).optional(),

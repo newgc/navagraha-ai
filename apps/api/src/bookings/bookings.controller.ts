@@ -1,6 +1,19 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { AuthContext, AuthedRequest } from '../auth/auth.types.js';
-import { CurrentAuth, Roles } from '../auth/decorators.js';
+import { CurrentAuth, Public, Roles } from '../auth/decorators.js';
+import { GATEWAY_WEBHOOK_TYPE } from '../payments/gateway.js';
 import { parseBody } from '../common/zod.js';
 import {
   BookingListQuery,
@@ -11,12 +24,14 @@ import {
   ChangeRequestInput,
   ManualBookingInput,
   OfflinePaymentInput,
+  PaymentLinkInput,
   ReasonInput,
   RefundInput,
 } from './booking.schemas.js';
 import { BookingsService } from './bookings.service.js';
 import { CancellationsService } from './cancellations.service.js';
 import { ChangesService } from './changes.service.js';
+import { PaymentLinksService } from './payment-links.service.js';
 import { REFERENCE, UUID, valid } from './ids.js';
 
 /** Operations console API for concierge bookings (FS §12, §12.1). */
@@ -24,6 +39,7 @@ import { REFERENCE, UUID, valid } from './ids.js';
 export class BookingsController {
   constructor(
     @Inject(BookingsService) private readonly bookings: BookingsService,
+    @Inject(PaymentLinksService) private readonly links: PaymentLinksService,
     @Inject(ChangesService) private readonly changes: ChangesService,
     @Inject(CancellationsService) private readonly cancellations: CancellationsService,
   ) {}
@@ -100,6 +116,25 @@ export class BookingsController {
     );
   }
 
+  /** D-11 — create a gateway payment link for the balance due and send it on WhatsApp. */
+  @Post(':reference/payments/link')
+  @Roles('OPS_COORDINATOR', 'OPS_MANAGER', 'FINANCE')
+  async paymentLink(
+    @Param('reference') reference: string,
+    @Body() body: unknown,
+    @CurrentAuth() auth: AuthContext,
+    @Req() req: AuthedRequest,
+  ) {
+    const id = await this.bookings.idByReference(valid(reference, REFERENCE, 'booking reference'));
+    const sent = await this.links.create(
+      id,
+      parseBody(PaymentLinkInput, body),
+      auth,
+      req.correlationId,
+    );
+    return { ...(await this.bookings.detail(id)), linkDelivery: sent };
+  }
+
   /** D-19 step 1 — record an offline receipt. */
   @Post(':reference/payments/offline')
   @Roles('OPS_COORDINATOR', 'OPS_MANAGER', 'FINANCE')
@@ -156,7 +191,38 @@ export class BookingsController {
 
 @Controller('payments')
 export class PaymentsController {
-  constructor(@Inject(BookingsService) private readonly bookings: BookingsService) {}
+  constructor(
+    @Inject(BookingsService) private readonly bookings: BookingsService,
+    @Inject(PaymentLinksService) private readonly links: PaymentLinksService,
+  ) {}
+
+  /** MR-19 — read a link's payment from the gateway now (e.g. a webhook was missed). */
+  @Post(':id/reconcile')
+  @HttpCode(200)
+  @Roles('OPS_COORDINATOR', 'OPS_MANAGER', 'FINANCE')
+  async reconcile(
+    @Param('id') id: string,
+    @CurrentAuth() auth: AuthContext,
+    @Req() req: AuthedRequest,
+  ) {
+    const paymentId = valid(id, UUID, 'payment id');
+    await this.links.reconcile(paymentId, req.correlationId, auth.userId);
+    return this.bookings.detail(await this.links.bookingOf(paymentId));
+  }
+
+  /** Stop an unpaid payment link. */
+  @Post(':id/cancel-link')
+  @HttpCode(200)
+  @Roles('OPS_COORDINATOR', 'OPS_MANAGER', 'FINANCE')
+  async cancelLink(
+    @Param('id') id: string,
+    @CurrentAuth() auth: AuthContext,
+    @Req() req: AuthedRequest,
+  ) {
+    const paymentId = valid(id, UUID, 'payment id');
+    await this.links.cancel(paymentId, auth, req.correlationId);
+    return this.bookings.detail(await this.links.bookingOf(paymentId));
+  }
 
   /** D-19 step 2 — a different Finance / Ops Manager user confirms the money arrived. */
   @Post(':id/confirm')
@@ -185,6 +251,40 @@ export class PaymentsController {
       auth,
       req.correlationId,
     );
+  }
+}
+
+/**
+ * FS §32 POST /payments/webhook — gateway notifications. Public, but only signed requests are
+ * accepted. The API is not on the internet: the website forwards the raw body here unchanged
+ * (apps/web/app/webhooks/cashfree/route.ts) with the gateway's signature headers.
+ */
+@Controller('payments/webhook')
+export class PaymentWebhooksController {
+  constructor(@Inject(PaymentLinksService) private readonly links: PaymentLinksService) {}
+
+  @Public()
+  @Post('cashfree')
+  @HttpCode(200)
+  async cashfree(@Body() body: unknown, @Req() req: AuthedRequest) {
+    if (!Buffer.isBuffer(body)) {
+      throw new BadRequestException(`Send the raw body as ${GATEWAY_WEBHOOK_TYPE}`);
+    }
+    const header = (name: string) => {
+      const v = req.headers[name];
+      return Array.isArray(v) ? v[0] : v;
+    };
+    const ok = await this.links.receiveWebhook(
+      body,
+      {
+        'x-webhook-signature': header('x-webhook-signature'),
+        'x-webhook-timestamp': header('x-webhook-timestamp'),
+        'x-idempotency-key': header('x-idempotency-key'),
+      },
+      req.correlationId,
+    );
+    if (!ok) throw new UnauthorizedException('Signature does not match');
+    return { ok: true };
   }
 }
 

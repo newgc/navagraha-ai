@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  HashwaWhatsAppOtpSender,
-  LogCopyOtpSender,
-  type OtpSender,
-} from '../src/auth/otp-sender.js';
+import { LogCopyOtpSender, WhatsAppOtpSender, type OtpSender } from '../src/auth/otp-sender.js';
+import { HashwaWhatsApp } from '../src/messaging/whatsapp.js';
 
 function fakeFetch(status: number, body: unknown) {
   const calls: { url: string; form: FormData }[] = [];
@@ -14,43 +11,34 @@ function fakeFetch(status: number, body: unknown) {
   return { fetch, calls };
 }
 
-const options = {
-  apiUrl: 'https://eco.hashwa.in/api/',
-  secret: 'the-secret',
-  account: 'acc-1',
-  expiresInMinutes: 5,
-};
+const options = { apiUrl: 'https://eco.hashwa.in/api/', secret: 'the-secret', account: 'acc-1' };
 
-describe('HashwaWhatsAppOtpSender (D-11)', () => {
-  it('sends our code as a priority WhatsApp text from the linked account', async () => {
+describe('HashwaWhatsApp (D-11)', () => {
+  it('sends a priority WhatsApp text from the linked account', async () => {
     const { fetch, calls } = fakeFetch(200, {
       status: 200,
       message: 'WhatsApp chat has been sent!',
       data: { messageId: 1 },
     });
-    const sender = new HashwaWhatsAppOtpSender({ ...options, fetch });
-    await sender.send('+919876543210', '123456');
+    await new HashwaWhatsApp({ ...options, fetch }).sendText('+919876543210', 'hello');
 
-    expect(sender.channel).toBe('whatsapp');
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toBe('https://eco.hashwa.in/api/send/whatsapp');
-    const form = calls[0]!.form;
-    expect(Object.fromEntries(form.entries())).toMatchObject({
+    expect(Object.fromEntries(calls[0]!.form.entries())).toEqual({
       secret: 'the-secret',
       account: 'acc-1',
       recipient: '+919876543210',
       type: 'text',
       priority: '1',
+      message: 'hello',
     });
-    expect(form.get('message')).toMatch(
-      /^123456 is your Navagraha AI sign-in code\. It expires in 5 minutes/,
-    );
   });
 
   it('fails when Hashwa refuses, without putting the secret in the error', async () => {
     const { fetch } = fakeFetch(200, { status: 403, message: 'Invalid API secret' });
-    const sender = new HashwaWhatsAppOtpSender({ ...options, fetch });
-    const error = await sender.send('+919876543210', '123456').catch((e: Error) => e);
+    const error = await new HashwaWhatsApp({ ...options, fetch })
+      .sendText('+919876543210', 'hi')
+      .catch((e: Error) => e);
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toMatch(/did not send.*Invalid API secret/);
     expect((error as Error).message).not.toContain('the-secret');
@@ -59,8 +47,18 @@ describe('HashwaWhatsAppOtpSender (D-11)', () => {
   it('fails on an HTTP error or an unreadable reply', async () => {
     const { fetch } = fakeFetch(502, 'Bad Gateway');
     await expect(
-      new HashwaWhatsAppOtpSender({ ...options, fetch }).send('+919876543210', '1'),
+      new HashwaWhatsApp({ ...options, fetch }).sendText('+919876543210', 'hi'),
     ).rejects.toThrow(/HTTP 502/);
+  });
+});
+
+describe('WhatsAppOtpSender', () => {
+  it('sends the code with how long it lasts', async () => {
+    const sent: string[] = [];
+    const sender = new WhatsAppOtpSender({ sendText: async (_p, t) => void sent.push(t) }, 5);
+    await sender.send('+919876543210', '123456');
+    expect(sender.channel).toBe('whatsapp');
+    expect(sent[0]).toMatch(/^123456 is your Navagraha AI sign-in code\. It expires in 5 minutes/);
   });
 });
 

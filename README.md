@@ -119,6 +119,9 @@ payment condition and every mandatory supplier item are both satisfied (FS §33)
 free Neon PostgreSQL 16 database (test data only). Every push to `main` deploys there once CI
 is green: [docs/runbooks/vps-staging.md](docs/runbooks/vps-staging.md).
 
+Online payments are Cashfree payment links sent on WhatsApp; only Cashfree's own records mark
+a link paid (D-11, `docs/decisions/D-11-payment-gateway-cashfree.md`).
+
 **Production** is planned on AWS Lightsail with an encrypted database in Mumbai (MR-37):
 [docs/runbooks/aws-lightsail.md](docs/runbooks/aws-lightsail.md).
 

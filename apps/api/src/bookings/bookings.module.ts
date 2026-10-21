@@ -4,6 +4,7 @@ import {
   BookingsController,
   FulfilmentsController,
   PaymentsController,
+  PaymentWebhooksController,
 } from './bookings.controller.js';
 import { BookingCore } from './booking-core.js';
 import { BookingsService } from './bookings.service.js';
@@ -14,11 +15,14 @@ import {
   RefundsController,
 } from './changes.controller.js';
 import { ChangesService } from './changes.service.js';
+import { PaymentLinksService } from './payment-links.service.js';
+import { gatewayProvider } from '../payments/gateway.js';
 
 @Module({
   controllers: [
     BookingsController,
     PaymentsController,
+    PaymentWebhooksController,
     FulfilmentsController,
     ChangeRequestsController,
     CancellationsController,
@@ -30,6 +34,8 @@ import { ChangesService } from './changes.service.js';
     ChangesService,
     CancellationsService,
     TransitionService,
+    PaymentLinksService,
+    gatewayProvider,
   ],
 })
 export class BookingsModule {}

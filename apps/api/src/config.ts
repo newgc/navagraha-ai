@@ -33,6 +33,24 @@ const EnvSchema = z
      * Idempotent and audited; manage everyone else on the Team screen.
      */
     BOOTSTRAP_ADMIN_PHONES: z.string().optional(),
+    /** Payment gateway for payment links (D-11). `none` hides the "Send payment link" action. */
+    PAYMENT_GATEWAY: z.enum(['none', 'cashfree']).default('none'),
+    /** `sandbox` takes no real money; only DEPLOY_ENV=production may use `production`. */
+    CASHFREE_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+    CASHFREE_CLIENT_ID: z.string().min(1).optional(),
+    /** Also the key that signs Cashfree's webhooks. */
+    CASHFREE_CLIENT_SECRET: z.string().min(1).optional(),
+    CASHFREE_API_VERSION: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .default('2026-01-01'),
+    /** Public address of the website, e.g. https://navagrahayathra.in (link return page). */
+    PUBLIC_WEB_URL: z.url().optional(),
+    /**
+     * How long a payment link stays payable. Payment timing is open business policy (D-06,
+     * FS §31 "payment timing unspecified"); this is the setting until it is decided.
+     */
+    PAYMENT_LINK_EXPIRY_HOURS: z.coerce.number().int().min(1).max(720).default(48),
   })
   .superRefine((env, ctx) => {
     if (env.OTP_SENDER === 'file' && !env.OTP_OUTBOX_FILE) {
@@ -47,6 +65,28 @@ const EnvSchema = z
         if (!env[key]) {
           ctx.addIssue({ code: 'custom', path: [key], message: 'is required for WhatsApp codes' });
         }
+      }
+    }
+    if (env.PAYMENT_GATEWAY === 'cashfree') {
+      for (const key of ['CASHFREE_CLIENT_ID', 'CASHFREE_CLIENT_SECRET'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({ code: 'custom', path: [key], message: 'is required for Cashfree' });
+        }
+      }
+      // Real money only on the production deployment, and never test money there.
+      if (env.CASHFREE_ENV === 'production' && env.DEPLOY_ENV !== 'production') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['CASHFREE_ENV'],
+          message: 'production keys may only be used when DEPLOY_ENV is production',
+        });
+      }
+      if (env.CASHFREE_ENV === 'sandbox' && env.DEPLOY_ENV === 'production') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['CASHFREE_ENV'],
+          message: 'the production deployment must use production keys',
+        });
       }
     }
     const realServer = env.NODE_ENV === 'production' || env.DEPLOY_ENV !== 'local';

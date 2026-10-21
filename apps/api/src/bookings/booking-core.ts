@@ -35,6 +35,14 @@ import type { ManualBookingInput, QuoteLinesInput, StopsInput } from './booking.
 
 const { booking, itinerary, quote, payment, fulfilmentComponent: component, trip } = schema;
 
+/** Bookings that can still take payments and supplier changes. */
+export const OPEN_STATES = [
+  'REQUESTED',
+  'PENDING_CONFIRMATION',
+  'CONFIRMED',
+  'IN_PROGRESS',
+] as const;
+
 export const today = () => new Date().toISOString().slice(0, 10);
 export type BookingRow = typeof booking.$inferSelect;
 export type PaymentRow = typeof payment.$inferSelect;
@@ -324,7 +332,7 @@ export class BookingCore {
    * applied change. Opens: PENDING_CONFIRMATION → CONFIRMED and the Trip is created.
    * Closes: back to PENDING_CONFIRMATION with the reason.
    */
-  async reevaluate(tx: Tx, bookingId: string, triggeredBy: string, correlationId: string) {
+  async reevaluate(tx: Tx, bookingId: string, triggeredBy: string | null, correlationId: string) {
     const [b] = await tx.select().from(booking).where(eq(booking.id, bookingId));
     if (!b || (b.state !== 'PENDING_CONFIRMATION' && b.state !== 'CONFIRMED')) return;
     const [q] = await tx.select().from(quote).where(eq(quote.id, b.activeQuoteId!));

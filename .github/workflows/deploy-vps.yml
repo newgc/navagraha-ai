@@ -4,7 +4,8 @@
 # GitHub → Settings → Environments → "staging":
 #   Secrets:   VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_KNOWN_HOSTS,
 #              DATABASE_URL (Neon), AUTH_SECRET,
-#              WHATSAPP_API_SECRET + WHATSAPP_ACCOUNT (Hashwa; sign-in codes on WhatsApp, D-11)
+#              WHATSAPP_API_SECRET + WHATSAPP_ACCOUNT (Hashwa; sign-in codes on WhatsApp, D-11),
+#              CASHFREE_CLIENT_ID + CASHFREE_CLIENT_SECRET (sandbox keys; payment links, D-11)
 #   Variables: VPS_PORT (SSH, default 22), WEB_PORT (default 3100), API_PORT (default 4100),
 #              BOOTSTRAP_ADMIN_PHONES, NODE_HEAP_MB (optional, default 384)
 #   A variable added under Secrets by mistake is read from there too.
@@ -128,6 +129,10 @@ jobs:
           NODE_HEAP_MB: ${{ vars.NODE_HEAP_MB || secrets.NODE_HEAP_MB || '384' }}
           WHATSAPP_API_SECRET: ${{ secrets.WHATSAPP_API_SECRET }}
           WHATSAPP_ACCOUNT: ${{ vars.WHATSAPP_ACCOUNT || secrets.WHATSAPP_ACCOUNT }}
+          CASHFREE_CLIENT_ID: ${{ secrets.CASHFREE_CLIENT_ID }}
+          CASHFREE_CLIENT_SECRET: ${{ secrets.CASHFREE_CLIENT_SECRET }}
+          PUBLIC_WEB_URL: ${{ vars.PUBLIC_WEB_URL || secrets.PUBLIC_WEB_URL || 'https://navagrahayathra.in' }}
+          PAYMENT_LINK_EXPIRY_HOURS: ${{ vars.PAYMENT_LINK_EXPIRY_HOURS || secrets.PAYMENT_LINK_EXPIRY_HOURS || '48' }}
         run: |
           # Sent over SSH's stdin, so secrets never appear in a command line on either side.
           python3 - <<'PY' | ssh vps "umask 077; cat > ~/navagraha/shared/env.json.new && mv ~/navagraha/shared/env.json.new ~/navagraha/shared/env.json"
@@ -152,6 +157,15 @@ jobs:
               settings["OTP_SENDER"] = "whatsapp"
               settings["WHATSAPP_API_SECRET"] = e["WHATSAPP_API_SECRET"]
               settings["WHATSAPP_ACCOUNT"] = e["WHATSAPP_ACCOUNT"]
+          # Payment links through Cashfree's sandbox (test money only) once its keys are set
+          # (D-11). Staging never takes real money: the API refuses production keys here.
+          settings["PUBLIC_WEB_URL"] = e["PUBLIC_WEB_URL"]
+          settings["PAYMENT_LINK_EXPIRY_HOURS"] = e["PAYMENT_LINK_EXPIRY_HOURS"]
+          if e.get("CASHFREE_CLIENT_ID") and e.get("CASHFREE_CLIENT_SECRET"):
+              settings["PAYMENT_GATEWAY"] = "cashfree"
+              settings["CASHFREE_ENV"] = "sandbox"
+              settings["CASHFREE_CLIENT_ID"] = e["CASHFREE_CLIENT_ID"]
+              settings["CASHFREE_CLIENT_SECRET"] = e["CASHFREE_CLIENT_SECRET"]
           print(json.dumps(settings))
           PY
 

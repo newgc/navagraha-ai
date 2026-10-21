@@ -5,6 +5,8 @@ import { useActionState, type ReactNode } from 'react';
 export interface ActionState {
   error?: string;
   done?: boolean;
+  /** Shown after a successful action, e.g. "Link sent on WhatsApp". */
+  notice?: string;
 }
 
 /**
@@ -34,6 +36,11 @@ export function ActionForm({
       {state.error && (
         <p role="alert" className="error">
           {state.error}
+        </p>
+      )}
+      {!state.error && state.notice && (
+        <p role="status" className="notice">
+          {state.notice}
         </p>
       )}
     </form>

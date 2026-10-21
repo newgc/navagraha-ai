@@ -25,7 +25,8 @@ import {
 import { and, asc, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { AuditService } from '../audit/audit.service.js';
-import { BookingCore, snapshot, today, type BookingRow } from './booking-core.js';
+import { APP_CONFIG, type AppConfig } from '../config.js';
+import { BookingCore, OPEN_STATES, snapshot, today, type BookingRow } from './booking-core.js';
 import type { AuthContext } from '../auth/auth.types.js';
 import { DB } from '../db/db.module.js';
 import {
@@ -49,7 +50,6 @@ const asActor = (auth: AuthContext): Actor => ({
   userId: auth.userId,
   roles: inActingOrder(auth.roles),
 });
-const OPEN_STATES = ['REQUESTED', 'PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS'] as const;
 
 /**
  * Concierge (manual) bookings, offline payments and supplier confirmation — FS §12, §12.1,
@@ -62,6 +62,7 @@ export class BookingsService {
     @Inject(TransitionService) private readonly transitions: TransitionService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(BookingCore) private readonly core: BookingCore,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   // ---------------------------------------------------------------- create
@@ -451,7 +452,16 @@ export class BookingsService {
           recordedBy: p.recordedByUserId,
           confirmedBy: p.confirmedByUserId,
           reason: p.reason,
+          link: p.gatewayLinkId
+            ? {
+                url: p.gatewayLinkUrl,
+                expiresAt: p.gatewayLinkExpiresAt,
+                gatewayPaymentId: p.gatewayPaymentId,
+              }
+            : null,
         })),
+        /** D-11: whether "Send payment link" is available on this server. */
+        gatewayEnabled: this.config.PAYMENT_GATEWAY !== 'none',
       },
       fulfilment: {
         state: fulfilmentState,

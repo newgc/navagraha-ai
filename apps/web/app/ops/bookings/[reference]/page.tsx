@@ -14,11 +14,14 @@ import {
 } from '@/lib/format';
 import {
   addReplacement,
+  cancelPaymentLink,
+  checkPaymentLink,
   confirmPayment,
   confirmSupplier,
   declineSupplier,
   recordPayment,
   rejectPayment,
+  sendPaymentLink,
   requestSupplier,
   waiveBalance,
 } from './actions';
@@ -98,7 +101,13 @@ interface Booking {
       recordedBy: string | null;
       confirmedBy: string | null;
       reason: string | null;
+      link: {
+        url: string | null;
+        expiresAt: string | null;
+        gatewayPaymentId: string | null;
+      } | null;
     }[];
+    gatewayEnabled: boolean;
   };
   fulfilment: {
     state: string;
@@ -403,8 +412,37 @@ export default async function BookingPage({ params }: { params: Promise<{ refere
                   )}{' '}
                   <Badge state={p.state} />
                   {p.reason && <div className="muted small">{p.reason}</div>}
+                  {p.link?.url && p.state === 'PENDING' && (
+                    <div className="small">
+                      Payment link:{' '}
+                      <a href={p.link.url} target="_blank" rel="noreferrer">
+                        {p.link.url}
+                      </a>{' '}
+                      <span className="muted">
+                        · valid until {formatDateTime(p.link.expiresAt)}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                {p.state === 'PENDING' && canConfirmPay && p.recordedBy !== myId && (
+                {p.link && canRecord && (p.state === 'PENDING' || p.state === 'FAILED') && (
+                  <div className="row">
+                    <ActionForm
+                      action={checkPaymentLink.bind(null, b.reference, p.id)}
+                      label="Check payment status"
+                      variant="secondary"
+                      inline
+                    />
+                    {p.state === 'PENDING' && (
+                      <ActionForm
+                        action={cancelPaymentLink.bind(null, b.reference, p.id)}
+                        label="Cancel link"
+                        variant="danger"
+                        inline
+                      />
+                    )}
+                  </div>
+                )}
+                {!p.link && p.state === 'PENDING' && canConfirmPay && p.recordedBy !== myId && (
                   <div className="row">
                     <ActionForm
                       action={confirmPayment.bind(null, b.reference, p.id)}
@@ -421,7 +459,7 @@ export default async function BookingPage({ params }: { params: Promise<{ refere
                     </ActionForm>
                   </div>
                 )}
-                {p.state === 'PENDING' && p.recordedBy === myId && (
+                {!p.link && p.state === 'PENDING' && p.recordedBy === myId && (
                   <p className="muted small">
                     You recorded this — someone else in Finance or a manager must confirm it (D-19).
                   </p>
@@ -429,6 +467,29 @@ export default async function BookingPage({ params }: { params: Promise<{ refere
               </li>
             ))}
           </ul>
+          {open && canRecord && b.payment.gatewayEnabled && b.payment.duePaise > 0 && (
+            <details>
+              <summary>Send a payment link</summary>
+              <p className="muted small">
+                Creates a secure Cashfree link (UPI, cards, netbanking) and sends it to the booker
+                on WhatsApp. The payment is recorded when Cashfree confirms it — nobody needs to
+                confirm it by hand.
+              </p>
+              <ActionForm
+                action={sendPaymentLink.bind(null, b.reference)}
+                label="Send payment link"
+              >
+                <label>
+                  Amount (₹) — leave empty for the whole balance due
+                  <input
+                    name="amount"
+                    inputMode="decimal"
+                    placeholder={String(b.payment.duePaise / 100)}
+                  />
+                </label>
+              </ActionForm>
+            </details>
+          )}
           {open && canRecord && b.payment.duePaise > 0 && (
             <details>
               <summary>Record a payment received</summary>

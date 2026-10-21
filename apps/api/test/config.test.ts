@@ -16,6 +16,10 @@ describe('loadConfig', () => {
       API_PORT: 4000,
       OTP_SENDER: 'console',
       HASHWA_API_URL: 'https://eco.hashwa.in/api',
+      PAYMENT_GATEWAY: 'none',
+      CASHFREE_ENV: 'sandbox',
+      CASHFREE_API_VERSION: '2026-01-01',
+      PAYMENT_LINK_EXPIRY_HOURS: 48,
     });
   });
 
@@ -74,5 +78,23 @@ describe('loadConfig', () => {
     expect(
       loadConfig({ ...ready, NODE_ENV: 'production', DEPLOY_ENV: 'production' }).OTP_SENDER,
     ).toBe('whatsapp');
+  });
+
+  it('Cashfree needs keys, and test and real money never cross deployments', () => {
+    const cf = { ...base, PAYMENT_GATEWAY: 'cashfree' };
+    expect(() => loadConfig(cf)).toThrow(/CASHFREE_CLIENT_ID.*CASHFREE_CLIENT_SECRET/s);
+    const keys = { ...cf, CASHFREE_CLIENT_ID: 'id', CASHFREE_CLIENT_SECRET: 'secret' };
+    expect(loadConfig(keys).CASHFREE_ENV).toBe('sandbox');
+    expect(() => loadConfig({ ...keys, CASHFREE_ENV: 'production' })).toThrow(/DEPLOY_ENV/);
+    const prod = {
+      ...keys,
+      NODE_ENV: 'production',
+      DEPLOY_ENV: 'production',
+      OTP_SENDER: 'whatsapp',
+      WHATSAPP_API_SECRET: 's',
+      WHATSAPP_ACCOUNT: 'a',
+    };
+    expect(() => loadConfig(prod)).toThrow(/production keys/);
+    expect(loadConfig({ ...prod, CASHFREE_ENV: 'production' }).CASHFREE_ENV).toBe('production');
   });
 });

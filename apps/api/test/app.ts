@@ -6,6 +6,8 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import { OTP_SENDER, type OtpSender } from '../src/auth/otp-sender.js';
+import { WHATSAPP, type WhatsAppMessenger } from '../src/messaging/whatsapp.js';
+import { PAYMENT_GATEWAY, type PaymentGateway } from '../src/payments/gateway.js';
 import { APP_CONFIG, type AppConfig } from '../src/config.js';
 
 /** Captures sign-in codes instead of sending them. */
@@ -25,7 +27,11 @@ export class CapturingOtpSender implements OtpSender {
 }
 
 /** A fully wired app on a freshly migrated and seeded database. */
-export async function createTestApp(url: string, overrides: Partial<AppConfig> = {}) {
+export async function createTestApp(
+  url: string,
+  overrides: Partial<AppConfig> = {},
+  fakes: { gateway?: PaymentGateway; whatsapp?: WhatsAppMessenger } = {},
+) {
   const { db, pool } = createDb(url);
   await resetDatabase(db);
   await seedDatabase(db);
@@ -39,15 +45,21 @@ export async function createTestApp(url: string, overrides: Partial<AppConfig> =
     AUTH_SECRET: 'test-secret-test-secret-test-secret-0000',
     OTP_SENDER: 'console',
     HASHWA_API_URL: 'https://eco.hashwa.in/api',
+    PAYMENT_GATEWAY: 'none',
+    CASHFREE_ENV: 'sandbox',
+    CASHFREE_API_VERSION: '2026-01-01',
+    PAYMENT_LINK_EXPIRY_HOURS: 48,
     ...overrides,
   };
   const otp = new CapturingOtpSender();
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+  let builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(APP_CONFIG)
     .useValue(config)
     .overrideProvider(OTP_SENDER)
-    .useValue(otp)
-    .compile();
+    .useValue(otp);
+  if (fakes.gateway) builder = builder.overrideProvider(PAYMENT_GATEWAY).useValue(fakes.gateway);
+  if (fakes.whatsapp) builder = builder.overrideProvider(WHATSAPP).useValue(fakes.whatsapp);
+  const moduleRef = await builder.compile();
   const app = configureApp(
     moduleRef.createNestApplication<NestExpressApplication>({ logger: false }),
   );

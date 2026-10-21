@@ -238,10 +238,23 @@ export const payment = pgTable(
     confirmedByUserId: uuid('confirmed_by_user_id').references(() => appUser.id),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
     reason: text('reason'),
+    /** FS §11.2 — always INR today; kept so gateway amounts are never read without it. */
+    currency: text('currency').notNull().default('INR'),
+    /** Gateway payment link (D-11 Cashfree): our link_id, the customer's URL and its expiry. */
+    gatewayLinkId: text('gateway_link_id'),
+    gatewayLinkUrl: text('gateway_link_url'),
+    gatewayLinkExpiresAt: timestamp('gateway_link_expires_at', { withTimezone: true }),
+    /** Set from the gateway's own records when the money is captured (never from the client). */
+    gatewayOrderId: text('gateway_order_id'),
+    gatewayPaymentId: text('gateway_payment_id'),
+    /** FS §11.2 — the gateway's answer the capture was based on. */
+    gatewayResponse: jsonb('gateway_response'),
     ...timestamps(),
   },
   (t) => [
     index('payment_booking_idx').on(t.bookingId),
+    uniqueIndex('payment_gateway_link_uq').on(t.gatewayLinkId),
+    check('payment_gateway_link_chk', sql`${t.gatewayLinkId} is null or ${t.method} = 'GATEWAY'`),
     check(
       'payment_amounts_chk',
       sql`${t.amountPaise} >= 0 and ${t.refundedPaise} <= ${t.capturedPaise}`,
@@ -384,4 +397,26 @@ export const refund = pgTable(
       sql`${t.confirmedByUserId} is null or ${t.initiatedByUserId} is null or ${t.confirmedByUserId} <> ${t.initiatedByUserId}`,
     ),
   ],
+);
+
+/**
+ * MR-19 / NFR-09 — every signed gateway notification, once. A repeat delivery hits the
+ * unique key and is acknowledged without being processed again. The notification only
+ * triggers a reconciliation against the gateway's API; its contents are kept for support.
+ */
+export const gatewayEvent = pgTable(
+  'gateway_event',
+  {
+    id: id(),
+    provider: text('provider').notNull(),
+    /** The provider's idempotency key, or a hash of the raw body when there is none. */
+    eventKey: text('event_key').notNull(),
+    eventType: text('event_type'),
+    linkId: text('link_id'),
+    payload: jsonb('payload').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    error: text('error'),
+  },
+  (t) => [uniqueIndex('gateway_event_key_uq').on(t.provider, t.eventKey)],
 );

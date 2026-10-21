@@ -1,6 +1,7 @@
 import { appendFile } from 'node:fs/promises';
 import { maskPhone } from '@navagraha/domain';
 import { Logger } from '@nestjs/common';
+import type { WhatsAppMessenger } from '../messaging/whatsapp.js';
 
 /** Where the person should look for their code; the sign-in page says so. */
 export type OtpChannel = 'whatsapp' | 'log';
@@ -38,66 +39,26 @@ export class FileOtpSender implements OtpSender {
   }
 }
 
-export interface HashwaOptions {
-  /** e.g. https://eco.hashwa.in/api */
-  apiUrl: string;
-  /** API secret from Hashwa → Tools → API Keys (needs the "wa_send" permission). */
-  secret: string;
-  /** Unique ID of the linked WhatsApp account that sends the message. */
-  account: string;
-  /** Shown in the message so the person knows how long the code lasts. */
-  expiresInMinutes: number;
-  fetch?: typeof fetch;
-}
-
 /**
- * WhatsApp through Hashwa (D-11). Sends our own code as a text from the linked WhatsApp
- * account. Hashwa's /send/otp would generate and check codes itself; we keep codes, attempt
+ * WhatsApp (D-11). Sends our own code as a text through the configured WhatsApp messenger
+ * (Hashwa). Hashwa's /send/otp would generate and check codes itself; we keep codes, attempt
  * limits and audit in our database instead, so the provider can change without touching
  * sign-in.
  */
-export class HashwaWhatsAppOtpSender implements OtpSender {
+export class WhatsAppOtpSender implements OtpSender {
   readonly channel: OtpChannel = 'whatsapp';
-  private readonly fetch: typeof fetch;
 
-  constructor(private readonly options: HashwaOptions) {
-    this.fetch = options.fetch ?? fetch;
-  }
+  constructor(
+    private readonly whatsapp: WhatsAppMessenger,
+    private readonly expiresInMinutes: number,
+  ) {}
 
   async send(phone: string, code: string) {
-    const form = new FormData();
-    form.set('secret', this.options.secret);
-    form.set('account', this.options.account);
-    form.set('recipient', phone);
-    form.set('type', 'text');
-    // A person is waiting on the sign-in page: ask Hashwa to send it straight away.
-    form.set('priority', '1');
-    form.set(
-      'message',
-      `${code} is your Navagraha AI sign-in code. It expires in ${this.options.expiresInMinutes} ` +
+    await this.whatsapp.sendText(
+      phone,
+      `${code} is your Navagraha AI sign-in code. It expires in ${this.expiresInMinutes} ` +
         'minutes. Do not share it with anyone — our team will never ask for it.',
     );
-
-    // The secret travels in the body, never in the URL, so it cannot end up in an error.
-    const url = `${this.options.apiUrl.replace(/\/+$/, '')}/send/whatsapp`;
-    let res: Response;
-    try {
-      res = await this.fetch(url, {
-        method: 'POST',
-        body: form,
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch (err) {
-      throw new Error(`Hashwa could not be reached: ${(err as Error).message}`);
-    }
-    const reply = (await res.json().catch(() => null)) as {
-      status?: number;
-      message?: string;
-    } | null;
-    if (!res.ok || reply?.status !== 200) {
-      const detail = reply?.message ? `: ${reply.message}` : '';
-      throw new Error(`Hashwa did not send the message (HTTP ${res.status}${detail})`);
-    }
   }
 }
 

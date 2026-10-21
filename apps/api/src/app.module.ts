@@ -7,6 +7,7 @@ import { TempleDataModule } from './temple-data/temple-data.module.js';
 import { APP_CONFIG, loadConfig } from './config.js';
 import { DbModule } from './db/db.module.js';
 import { HealthController } from './health/health.controller.js';
+import { MessagingModule } from './messaging/whatsapp.js';
 import { TemplesController } from './temples/temples.controller.js';
 import { TemplesService } from './temples/temples.service.js';
 
@@ -27,6 +28,7 @@ class ConfigModule {}
     ConfigModule,
     DbModule,
     AuditModule,
+    MessagingModule,
     AuthModule,
     BookingsModule,
     TempleDataModule,
