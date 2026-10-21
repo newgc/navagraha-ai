@@ -40,7 +40,11 @@ export function SignInForm() {
   }
   return (
     <form action={checkCode} className="stack">
-      <p>We sent a 6-digit code to {phoneState.phone}.</p>
+      <p>
+        {phoneState.channel === 'whatsapp'
+          ? `We sent a 6-digit code to ${phoneState.phone} on WhatsApp.`
+          : `We sent a 6-digit code to ${phoneState.phone}.`}
+      </p>
       <label>
         Code
         <input

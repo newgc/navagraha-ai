@@ -1,4 +1,4 @@
-# D-11 (part) — Sign-in codes are sent on WhatsApp through Haswa
+# D-11 (part) — Sign-in codes are sent on WhatsApp through Hashwa
 
 |            |                                                                       |
 | ---------- | --------------------------------------------------------------------- |
@@ -9,8 +9,12 @@
 
 ## Decision
 
-- Sign-in codes go to the person's phone number **on WhatsApp**, through the **Haswa**
-  WhatsApp API, using a Meta-approved **Authentication** template.
+- Sign-in codes go to the person's phone number **on WhatsApp**, through the **Hashwa** API
+  (`POST https://eco.hashwa.in/api/send/whatsapp`, API doc version 10.07.25): a text message
+  sent from the WhatsApp account linked in Hashwa. No Meta template is involved.
+- **We generate and check the codes ourselves** (HMAC-hashed, 5-minute life, 5 attempts,
+  audited). Hashwa's own `/send/otp` + `/get/otp` would move checking to the provider; we do
+  not use them, so a provider change never touches sign-in.
 - **WhatsApp-only for now.** There is no SMS or email fallback yet; someone without WhatsApp
   on that number cannot sign in. This is accepted for staff and the pilot.
 - The code sender stays behind the `OtpSender` adapter (`apps/api/src/auth/otp-sender.ts`),
@@ -23,7 +27,17 @@
   provider (India DLT registration has a lead time) or email before opening sign-in to the
   public.
 
-## Waiting on
+## Risk to know
 
-- Haswa API documentation (endpoint, how the API key is sent), the approved template name and
-  language, and the connected sender number. The API key goes only into GitHub secrets.
+Hashwa sends from an ordinary linked WhatsApp account, not the official WhatsApp Business
+(Cloud) API. WhatsApp can restrict or ban numbers that send automated messages. Use a
+**dedicated number** for sign-in codes (not a personal or InstaLeads number), and if it is
+ever blocked, sign-in stops until another account is linked. Moving to an official WhatsApp
+Business API provider later only means another `OtpSender`.
+
+## Settings
+
+GitHub `staging` environment: secret `WHATSAPP_API_SECRET` (Hashwa → Tools → API Keys, with
+the `wa_send` permission) and `WHATSAPP_ACCOUNT` (the linked account's unique ID). With both
+set, the deploy switches `OTP_SENDER` to `whatsapp`; staging also keeps a copy of each code
+in its log for the "Staging sign-in codes" button. Production refuses any sender but WhatsApp.

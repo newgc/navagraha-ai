@@ -22,7 +22,8 @@ Navagraha settings and logs, and Neon has no India region (the data sits in Sing
 real customers' data (MR-37), production moves to the encrypted Lightsail database in Mumbai:
 [aws-lightsail.md](aws-lightsail.md).
 
-**Sign-in:** there is no SMS provider yet (D-11), so sign-in codes are read with the
+**Sign-in:** codes go out on WhatsApp through Hashwa once its two settings are in GitHub
+(step 7, D-11). Until then — and as a backup afterwards — they are read with the
 **Staging sign-in codes** button in GitHub (step 6).
 
 ---
@@ -125,6 +126,19 @@ Staging status** — it shows whether the apps answer on 127.0.0.1 and which por
    shows `Sign-in code for +91******1234: 123456`. Enter that code (codes expire quickly).
 3. **Team** (top menu) → add your coordinators, managers, finance and content people. They
    read their codes the same way until SMS is set up.
+
+## 7. Sign-in codes on WhatsApp (Hashwa)
+
+1. Hashwa dashboard → **Tools → API Keys** → create a key with the **`wa_send`** permission →
+   copy the **API secret**.
+2. Hashwa dashboard → **WhatsApp accounts** → copy the **unique ID** of the linked account
+   that should send the codes. Use a dedicated number: WhatsApp may restrict numbers that
+   send automated messages.
+3. GitHub → `staging` environment → **secrets** `WHATSAPP_API_SECRET` (step 1) and
+   `WHATSAPP_ACCOUNT` (step 2).
+4. **Actions → Deploy to VPS → Run workflow.** Sign in again: the page now says "…on
+   WhatsApp" and the code arrives there. If Hashwa refuses, the page says the code could not
+   be sent, and **Staging status** shows Hashwa's reason in the API log.
 
 ---
 

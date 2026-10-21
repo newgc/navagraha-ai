@@ -115,7 +115,11 @@ export class AuthService {
       this.logger.error(`OTP delivery failed for ${maskPhone(phone)} [${meta.correlationId}]`, err);
       throw new ServiceUnavailableException('We could not send the code. Please try again.');
     }
-    return { challengeId, expiresAt: row!.expiresAt.toISOString() };
+    return {
+      challengeId,
+      expiresAt: row!.expiresAt.toISOString(),
+      channel: this.sender.channel,
+    };
   }
 
   async verifyOtp(challengeId: string, code: string, meta: RequestMeta) {

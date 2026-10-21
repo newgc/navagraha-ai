@@ -16,12 +16,17 @@ const EnvSchema = z
     /** Key for OTP code HMACs. Generate with: openssl rand -base64 48 */
     AUTH_SECRET: z.string().min(32, 'must be at least 32 characters'),
     /**
-     * How sign-in codes are delivered until an SMS provider is chosen (D-11): `console` prints
-     * them (allowed on staging); `file` appends them to OTP_OUTBOX_FILE for browser tests.
-     * Neither is allowed in production.
+     * How sign-in codes are delivered (D-11): `whatsapp` sends them through Hashwa (the only
+     * choice in production); `console` prints them (allowed on staging); `file` appends them to
+     * OTP_OUTBOX_FILE for browser tests.
      */
-    OTP_SENDER: z.enum(['console', 'file']).default('console'),
+    OTP_SENDER: z.enum(['console', 'file', 'whatsapp']).default('console'),
     OTP_OUTBOX_FILE: z.string().min(1).optional(),
+    /** Hashwa WhatsApp API (D-11). The secret needs the "wa_send" permission. */
+    HASHWA_API_URL: z.url().default('https://eco.hashwa.in/api'),
+    WHATSAPP_API_SECRET: z.string().min(1).optional(),
+    /** Unique ID of the linked WhatsApp account that sends the codes (Hashwa dashboard). */
+    WHATSAPP_ACCOUNT: z.string().min(1).optional(),
     /**
      * Phone numbers (comma-separated) that are made System Admin and Operations Manager at
      * startup, so the first admin can sign in on a server with no command line (Lightsail).
@@ -37,17 +42,26 @@ const EnvSchema = z
         message: 'is required for the file sender',
       });
     }
+    if (env.OTP_SENDER === 'whatsapp') {
+      for (const key of ['WHATSAPP_API_SECRET', 'WHATSAPP_ACCOUNT'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({ code: 'custom', path: [key], message: 'is required for WhatsApp codes' });
+        }
+      }
+    }
     const realServer = env.NODE_ENV === 'production' || env.DEPLOY_ENV !== 'local';
     if (!realServer) return;
-    const allowed = env.DEPLOY_ENV === 'staging' && env.OTP_SENDER === 'console';
+    const allowed =
+      env.OTP_SENDER === 'whatsapp' ||
+      (env.DEPLOY_ENV === 'staging' && env.OTP_SENDER === 'console');
     if (!allowed) {
       ctx.addIssue({
         code: 'custom',
         path: ['OTP_SENDER'],
         message:
           env.DEPLOY_ENV === 'staging'
-            ? `${env.OTP_SENDER} cannot be used on a server; use console on staging`
-            : `${env.OTP_SENDER} cannot be used in production; configure an SMS provider (D-11)`,
+            ? `${env.OTP_SENDER} cannot be used on a server; use whatsapp or console on staging`
+            : `${env.OTP_SENDER} cannot be used in production; use whatsapp (D-11)`,
       });
     }
     if (/change-me/i.test(env.AUTH_SECRET)) {

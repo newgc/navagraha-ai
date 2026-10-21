@@ -7,6 +7,8 @@ import { SESSION_COOKIE, api, errorText } from '@/lib/api';
 export interface SignInState {
   step: 'phone' | 'code';
   phone?: string;
+  /** Where the code went: the page says "on WhatsApp" when it was sent there (D-11). */
+  channel?: 'whatsapp' | 'log';
   error?: string;
 }
 
@@ -15,10 +17,13 @@ const secure = process.env.NODE_ENV === 'production';
 
 export async function requestCode(_: SignInState, form: FormData): Promise<SignInState> {
   const phone = String(form.get('phone') ?? '').trim();
-  const r = await api<{ challengeId: string; expiresAt: string }>('/auth/otp/request', {
-    method: 'POST',
-    body: { phone },
-  });
+  const r = await api<{ challengeId: string; expiresAt: string; channel: 'whatsapp' | 'log' }>(
+    '/auth/otp/request',
+    {
+      method: 'POST',
+      body: { phone },
+    },
+  );
   if (!r.ok) return { step: 'phone', phone, error: errorText(r.error) };
   (await cookies()).set(CHALLENGE_COOKIE, r.data.challengeId, {
     httpOnly: true,
@@ -27,7 +32,7 @@ export async function requestCode(_: SignInState, form: FormData): Promise<SignI
     path: '/sign-in',
     maxAge: 10 * 60,
   });
-  return { step: 'code', phone };
+  return { step: 'code', phone, channel: r.data.channel };
 }
 
 export async function verifyCode(prev: SignInState, form: FormData): Promise<SignInState> {

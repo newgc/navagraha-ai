@@ -54,8 +54,9 @@ with the file's SHA-256.
 ## Sign-in and staff roles
 
 Everyone signs in with a phone number and a 6-digit code (`POST /v1/auth/otp/request`, then
-`POST /v1/auth/otp/verify`, which returns a bearer token). Until an SMS provider is chosen
-(D-11) codes are printed in the API log, and production refuses to start that way.
+`POST /v1/auth/otp/verify`, which returns a bearer token). Codes are sent on WhatsApp through
+Hashwa (`OTP_SENDER=whatsapp`, D-11); locally they are printed in the API log, and production
+refuses any sender but WhatsApp.
 
 Every API route needs a signed-in user unless it is marked `@Public()`. Staff roles are
 granted from the command line and audited:

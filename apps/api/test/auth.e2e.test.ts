@@ -37,7 +37,11 @@ describe.skipIf(!url)('OTP sign-in, sessions and roles', () => {
 
   it('signs in a new customer with a 6-digit code', async () => {
     const r = await requestCode().expect(202);
-    expect(r.body).toEqual({ challengeId: expect.any(String), expiresAt: expect.any(String) });
+    expect(r.body).toEqual({
+      challengeId: expect.any(String),
+      expiresAt: expect.any(String),
+      channel: 'log',
+    });
     expect(otp.last()).toEqual({ phone: `+91${phone}`, code: expect.stringMatching(/^\d{6}$/) });
 
     const v = await verify(r.body.challengeId, otp.last().code).expect(200);

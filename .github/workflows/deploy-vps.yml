@@ -3,7 +3,8 @@
 #
 # GitHub → Settings → Environments → "staging":
 #   Secrets:   VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_KNOWN_HOSTS,
-#              DATABASE_URL (Neon), AUTH_SECRET
+#              DATABASE_URL (Neon), AUTH_SECRET,
+#              WHATSAPP_API_SECRET + WHATSAPP_ACCOUNT (Hashwa; sign-in codes on WhatsApp, D-11)
 #   Variables: VPS_PORT (SSH, default 22), WEB_PORT (default 3100), API_PORT (default 4100),
 #              BOOTSTRAP_ADMIN_PHONES, NODE_HEAP_MB (optional, default 384)
 #   A variable added under Secrets by mistake is read from there too.
@@ -125,6 +126,8 @@ jobs:
           WEB_PORT: ${{ vars.WEB_PORT || secrets.WEB_PORT || '3100' }}
           API_PORT: ${{ vars.API_PORT || secrets.API_PORT || '4100' }}
           NODE_HEAP_MB: ${{ vars.NODE_HEAP_MB || secrets.NODE_HEAP_MB || '384' }}
+          WHATSAPP_API_SECRET: ${{ secrets.WHATSAPP_API_SECRET }}
+          WHATSAPP_ACCOUNT: ${{ vars.WHATSAPP_ACCOUNT || secrets.WHATSAPP_ACCOUNT }}
         run: |
           # Sent over SSH's stdin, so secrets never appear in a command line on either side.
           python3 - <<'PY' | ssh vps "umask 077; cat > ~/navagraha/shared/env.json.new && mv ~/navagraha/shared/env.json.new ~/navagraha/shared/env.json"
@@ -143,6 +146,12 @@ jobs:
           }
           if e.get("BOOTSTRAP_ADMIN_PHONES"):
               settings["BOOTSTRAP_ADMIN_PHONES"] = e["BOOTSTRAP_ADMIN_PHONES"]
+          # Sign-in codes on WhatsApp through Hashwa once both are set (D-11); until then
+          # staging prints them for the "Staging sign-in codes" button.
+          if e.get("WHATSAPP_API_SECRET") and e.get("WHATSAPP_ACCOUNT"):
+              settings["OTP_SENDER"] = "whatsapp"
+              settings["WHATSAPP_API_SECRET"] = e["WHATSAPP_API_SECRET"]
+              settings["WHATSAPP_ACCOUNT"] = e["WHATSAPP_ACCOUNT"]
           print(json.dumps(settings))
           PY
 

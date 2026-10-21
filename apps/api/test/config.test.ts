@@ -15,6 +15,7 @@ describe('loadConfig', () => {
       API_HOST: '127.0.0.1',
       API_PORT: 4000,
       OTP_SENDER: 'console',
+      HASHWA_API_URL: 'https://eco.hashwa.in/api',
     });
   });
 
@@ -55,10 +56,23 @@ describe('loadConfig', () => {
       loadConfig({ ...staging, OTP_SENDER: 'file', OTP_OUTBOX_FILE: '/tmp/otp' }),
     ).toThrow(/OTP_SENDER/);
     expect(() => loadConfig({ ...base, NODE_ENV: 'production', DEPLOY_ENV: 'production' })).toThrow(
-      /SMS provider/,
+      /use whatsapp/,
     );
     expect(() =>
       loadConfig({ ...staging, AUTH_SECRET: 'change-me-change-me-change-me-change-me' }),
     ).toThrow(/AUTH_SECRET/);
+  });
+
+  it('WhatsApp codes need the Hashwa secret and account, and are allowed everywhere', () => {
+    const whatsapp = { ...base, OTP_SENDER: 'whatsapp' };
+    expect(() => loadConfig(whatsapp)).toThrow(/WHATSAPP_API_SECRET.*WHATSAPP_ACCOUNT/s);
+    const ready = { ...whatsapp, WHATSAPP_API_SECRET: 's3cret', WHATSAPP_ACCOUNT: 'acc-1' };
+    expect(loadConfig(ready).OTP_SENDER).toBe('whatsapp');
+    expect(loadConfig({ ...ready, NODE_ENV: 'production', DEPLOY_ENV: 'staging' }).OTP_SENDER).toBe(
+      'whatsapp',
+    );
+    expect(
+      loadConfig({ ...ready, NODE_ENV: 'production', DEPLOY_ENV: 'production' }).OTP_SENDER,
+    ).toBe('whatsapp');
   });
 });

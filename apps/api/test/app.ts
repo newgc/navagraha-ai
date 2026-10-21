@@ -10,6 +10,7 @@ import { APP_CONFIG, type AppConfig } from '../src/config.js';
 
 /** Captures sign-in codes instead of sending them. */
 export class CapturingOtpSender implements OtpSender {
+  readonly channel = 'log' as const;
   readonly sent: { phone: string; code: string }[] = [];
   fail = false;
 
@@ -37,6 +38,7 @@ export async function createTestApp(url: string, overrides: Partial<AppConfig> =
     DATABASE_URL: url,
     AUTH_SECRET: 'test-secret-test-secret-test-secret-0000',
     OTP_SENDER: 'console',
+    HASHWA_API_URL: 'https://eco.hashwa.in/api',
     ...overrides,
   };
   const otp = new CapturingOtpSender();
