@@ -103,9 +103,14 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d navagrahayathra.in     # apt install certbot python3-certbot-nginx if missing
 ```
 
-If the server uses a hosting panel instead (CloudPanel, Plesk, aaPanel, …): add a site for
-`navagrahayathra.in` as a **reverse proxy to `http://127.0.0.1:3100`**, turn on Let's
-Encrypt, allow uploads up to 10 MB, and set `X-Forwarded-For` to the visitor's address.
+**This VPS uses CloudPanel** (how staging is set up today): **Sites → Add site → Node.js** for
+`navagrahayathra.in` with **App Port `3200`**, Let's Encrypt on. CloudPanel only accepts a
+port that is free when saving, so the GitHub variable `WEB_PORT` is `3200` to match; the
+deploy then runs the app there (nothing is started from CloudPanel). To change the port
+later: pick a free one in CloudPanel first, then set `WEB_PORT` to it and run the deploy.
+
+Other panels (Plesk, aaPanel, …): a reverse proxy to `http://127.0.0.1:<WEB_PORT>` with
+Let's Encrypt and uploads up to 10 MB.
 
 DNS: the domain `navagrahayathra.in` (and `www`) must have `A` records pointing to the VPS IP.
 
