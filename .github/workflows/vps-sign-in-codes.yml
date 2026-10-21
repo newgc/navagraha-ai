@@ -23,8 +23,21 @@ jobs:
           port: ${{ vars.VPS_PORT || secrets.VPS_PORT || '22' }}
           key: ${{ secrets.VPS_SSH_KEY }}
           known-hosts: ${{ secrets.VPS_KNOWN_HOSTS }}
-      - name: Latest codes (newest last; each works once and expires quickly)
-        run: ssh vps "grep -h 'Sign-in code for' ~/navagraha/logs/api.log | tail -n 10" || echo "No codes yet."
+      - name: Latest codes (newest last; each works once, for 5 minutes)
+        run: |
+          ssh vps 'bash -s' <<'SH'
+          now=$(date +%s)
+          lines=$(grep -h "Sign-in code for" ~/navagraha/logs/api.log 2>/dev/null | tail -n 5)
+          [ -n "$lines" ] || { echo "No codes yet. Request one on the sign-in page first."; exit 0; }
+          printf '%s\n' "$lines" | while IFS= read -r line; do
+            # pm2 prefixes each line with the server's local time: 2026-10-21T15:01:18:
+            ts=$(printf '%s' "$line" | cut -c1-19 | tr T ' ')
+            age=$(( (now - $(date -d "$ts" +%s)) / 60 ))
+            what=$(printf '%s' "$line" | grep -oE 'for \+[0-9*]+: [0-9]{6}')
+            if [ "$age" -lt 5 ]; then state="VALID — use within $((5 - age)) min"; else state="expired"; fi
+            echo "$what   ($age min ago, $state)"
+          done
+          SH
       - name: Clean up
         if: always()
         run: rm -f ~/.ssh/deploy_key
