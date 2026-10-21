@@ -1,0 +1,169 @@
+# Deploys main to the staging VPS (navagrahaai.newgc.in, next to InstaLeads) after CI passes.
+# Runs as an ordinary user on the server — no root. Setup: docs/runbooks/vps-staging.md.
+#
+# GitHub → Settings → Environments → "staging":
+#   Secrets:   VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_KNOWN_HOSTS,
+#              DATABASE_URL (Neon), AUTH_SECRET
+#   Variables: VPS_PORT (SSH, default 22), WEB_PORT (default 3100), API_PORT (default 4100),
+#              BOOTSTRAP_ADMIN_PHONES, NODE_HEAP_MB (optional, default 384)
+#
+# Builds the same Docker image CI checks and ships its /app folder plus its Node.js binary
+# (Debian 12, like the server), so the server runs exactly what was built and tested.
+
+name: Deploy to VPS
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+env:
+  # Process manager for the two apps; pinned, installed into the server's private runtime.
+  PM2_VERSION: 7.0.4
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Deploy exactly the commit CI tested.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Check settings
+        id: settings
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+        run: |
+          missing=""
+          for v in VPS_HOST VPS_USER VPS_SSH_KEY VPS_KNOWN_HOSTS DATABASE_URL AUTH_SECRET; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            # Not set up yet: skip quietly instead of failing every push.
+            echo "::notice::VPS deploy skipped — missing in the staging environment:$missing"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          elif ! printf '%s' "$DATABASE_URL" | grep -Eq '^postgres(ql)?://'; then
+            echo "::error::DATABASE_URL must start with postgres:// or postgresql://"; exit 1
+          elif [ "${#AUTH_SECRET}" -lt 32 ]; then
+            echo "::error::AUTH_SECRET must be at least 32 characters"; exit 1
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up SSH
+        if: steps.settings.outputs.configured == 'true'
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ "$VPS_PORT" = "22" ]; then hostspec="$VPS_HOST"; else hostspec="[$VPS_HOST]:$VPS_PORT"; fi
+          # The key-setup command scans the server as "localhost"; relabel to the real host.
+          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' | grep -v '^#' \
+            | sed -E "s/^[^ ]+ /$hostspec /" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<CFG
+          Host vps
+            HostName $VPS_HOST
+            Port $VPS_PORT
+            User $VPS_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          CFG
+          ssh vps 'echo "Connected to $(hostname) as $(whoami)"'
+
+      - name: Build image
+        if: steps.settings.outputs.configured == 'true'
+        run: docker build -t navagraha:release .
+
+      - name: Package release and runtime
+        if: steps.settings.outputs.configured == 'true'
+        run: |
+          out="$RUNNER_TEMP/pkg"; mkdir -p "$out/app" "$out/runtime/bin"
+          id=$(docker create navagraha:release)
+          docker cp "$id:/app/." "$out/app/"
+          docker cp "$id:/usr/local/bin/node" "$out/runtime/bin/node"
+          docker rm "$id" >/dev/null
+          cp -r deploy/vps "$out/app/deploy/"
+          node_version=$("$out/runtime/bin/node" --version)
+          npm install --prefix "$out/runtime/pm2" --omit=dev --no-audit --no-fund "pm2@$PM2_VERSION" >/dev/null
+          echo "RUNTIME_ID=node-${node_version}-pm2-${PM2_VERSION}" >> "$GITHUB_ENV"
+          release="$(date -u +%Y%m%d%H%M%S)-$(git rev-parse --short HEAD)"
+          echo "RELEASE=$release" >> "$GITHUB_ENV"
+          tar -czf "$RUNNER_TEMP/release.tgz" -C "$out/app" .
+          tar -czf "$RUNNER_TEMP/runtime.tgz" -C "$out/runtime" .
+          ls -lh "$RUNNER_TEMP"/*.tgz
+
+      - name: Upload
+        if: steps.settings.outputs.configured == 'true'
+        run: |
+          ssh vps "mkdir -p ~/navagraha/releases ~/navagraha/runtime ~/navagraha/shared && chmod 700 ~/navagraha/shared"
+          # The runtime (Node.js + pm2) only changes when its versions do.
+          if ! ssh vps "test -x ~/navagraha/runtime/$RUNTIME_ID/bin/node"; then
+            scp -q "$RUNNER_TEMP/runtime.tgz" vps:navagraha/runtime/upload.tgz
+            ssh vps "set -e; cd ~/navagraha/runtime; rm -rf '$RUNTIME_ID'; mkdir '$RUNTIME_ID'
+              tar -xzf upload.tgz -C '$RUNTIME_ID'; rm upload.tgz"
+          fi
+          ssh vps "ln -sfn '$RUNTIME_ID' ~/navagraha/runtime/current"
+          scp -q "$RUNNER_TEMP/release.tgz" "vps:navagraha/releases/$RELEASE.tgz"
+          ssh vps "set -e; cd ~/navagraha/releases; mkdir '$RELEASE'
+            tar -xzf '$RELEASE.tgz' -C '$RELEASE'; rm '$RELEASE.tgz'"
+
+      - name: Write settings
+        if: steps.settings.outputs.configured == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          BOOTSTRAP_ADMIN_PHONES: ${{ vars.BOOTSTRAP_ADMIN_PHONES }}
+          WEB_PORT: ${{ vars.WEB_PORT || '3100' }}
+          API_PORT: ${{ vars.API_PORT || '4100' }}
+          NODE_HEAP_MB: ${{ vars.NODE_HEAP_MB || '384' }}
+        run: |
+          # Sent over SSH's stdin, so secrets never appear in a command line on either side.
+          python3 - <<'PY' | ssh vps "umask 077; cat > ~/navagraha/shared/env.json.new && mv ~/navagraha/shared/env.json.new ~/navagraha/shared/env.json"
+          import json, os
+          e = os.environ
+          settings = {
+              "DEPLOY_ENV": "staging",
+              "DATABASE_URL": e["DATABASE_URL"],
+              # Neon's certificate is publicly signed: verify it against Node's built-in CAs.
+              "DATABASE_SSL": "verify",
+              "AUTH_SECRET": e["AUTH_SECRET"],
+              "OTP_SENDER": "console",
+              "WEB_PORT": e["WEB_PORT"],
+              "API_PORT": e["API_PORT"],
+              "NODE_HEAP_MB": e["NODE_HEAP_MB"],
+          }
+          if e.get("BOOTSTRAP_ADMIN_PHONES"):
+              settings["BOOTSTRAP_ADMIN_PHONES"] = e["BOOTSTRAP_ADMIN_PHONES"]
+          print(json.dumps(settings))
+          PY
+
+      - name: Deploy
+        if: steps.settings.outputs.configured == 'true'
+        run: ssh vps "bash ~/navagraha/releases/$RELEASE/deploy/vps/remote-deploy.sh"
+
+      - name: Clean up
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
