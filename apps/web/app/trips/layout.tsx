@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { SitePage } from '@/components/site-header';
 import { api, type Me } from '@/lib/api';
 import { signOut } from '../sign-in/actions';
 
@@ -11,14 +11,8 @@ export default async function TripsLayout({ children }: { children: ReactNode })
   const me = await api<Me>('/me');
   if (!me.ok) redirect('/sign-in');
   return (
-    <div className="customer">
-      <header className="ops-header">
-        <Link href="/trips" className="brand">
-          Navagraha AI · My trips
-        </Link>
-        <nav>
-          <Link href="/plan">Plan a pilgrimage</Link>
-        </nav>
+    <SitePage
+      right={
         <div className="who">
           <span>{me.data.displayName ?? me.data.phone}</span>
           <form action={signOut}>
@@ -27,8 +21,9 @@ export default async function TripsLayout({ children }: { children: ReactNode })
             </button>
           </form>
         </div>
-      </header>
+      }
+    >
       <main>{children}</main>
-    </div>
+    </SitePage>
   );
 }

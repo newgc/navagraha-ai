@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { Emblem } from '@/components/emblem';
 import { BOOKING_ROLES, STAFF_ROLES, TEMPLE_DATA_ROLES, api, type Me } from '@/lib/api';
 import { humanize } from '@/lib/format';
 import { signOut } from '../sign-in/actions';
@@ -18,6 +19,7 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
     <div className="ops">
       <header className="ops-header">
         <Link href="/ops" className="brand">
+          <Emblem size={28} />
           Navagraha AI · Operations
         </Link>
         <nav>

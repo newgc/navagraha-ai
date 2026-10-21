@@ -1,5 +1,9 @@
-/* Placeholder styling until the Figma Design System V1.0 tokens are supplied. */
+/* Brand styling (placeholder emblem and palette) until the Figma Design System V1.0 is supplied. */
 :root {
+  --saffron: #ea580c;
+  --gold: #c99a06;
+  --maroon: #7c2d12;
+  --heading-font: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Noto Serif', Georgia, serif;
   --bg: #fffaf3;
   --surface: #ffffff;
   --fg: #2b1a0e;
@@ -18,6 +22,9 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
+    --saffron: #fb923c;
+    --gold: #e7b923;
+    --maroon: #fdba74;
     --bg: #1a120c;
     --surface: #241a12;
     --fg: #f5ebe0;
@@ -436,4 +443,318 @@ h3 {
 }
 .timetable li {
   margin: 0.15rem 0;
+}
+
+/* ------------------------------------------------------------------ public site */
+.site {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.site > main {
+  flex: 1;
+  /* Auto margins in a flex column would shrink the page to its content. */
+  width: 100%;
+}
+.container {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+}
+.site-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+}
+.site-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  font-size: 0.95rem;
+}
+.site-header nav a {
+  color: var(--fg);
+  text-decoration: none;
+}
+.site-header nav a:hover {
+  color: var(--accent);
+}
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-decoration: none;
+  color: var(--fg);
+}
+.brand-name {
+  font-family: var(--heading-font);
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.brand-ai {
+  color: var(--saffron);
+}
+.cta-small {
+  margin-top: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+.cta-ghost {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.cta-light {
+  background: #fff7ed;
+  /* Fixed colours: this button always sits on the dark maroon band. */
+  color: #7c2d12;
+  margin-top: 0;
+}
+
+main.home {
+  max-width: none;
+  padding: 0;
+}
+.home h1,
+.home h2,
+.home h3 {
+  font-family: var(--heading-font);
+  color: var(--fg);
+}
+.hero {
+  background:
+    radial-gradient(
+      circle at 80% 30%,
+      color-mix(in srgb, var(--saffron) 18%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(180deg, color-mix(in srgb, var(--gold) 10%, var(--bg)), var(--bg));
+  border-bottom: 1px solid var(--line);
+}
+.hero-inner {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 2rem;
+  align-items: center;
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+}
+.hero h1 {
+  font-size: clamp(2.2rem, 6vw, 3.6rem);
+  line-height: 1.05;
+}
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0 0 0.75rem;
+}
+.lead {
+  font-size: 1.35rem;
+  color: var(--fg);
+  margin: 0 0 1rem;
+}
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.hero-art {
+  display: flex;
+  justify-content: center;
+}
+.hero-art .emblem {
+  width: min(100%, 300px);
+  height: auto;
+  filter: drop-shadow(0 12px 30px color-mix(in srgb, var(--saffron) 25%, transparent));
+}
+.band {
+  padding: 4rem 0;
+}
+.band-alt {
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.section-title {
+  font-size: clamp(1.5rem, 3.5vw, 2.1rem);
+  margin-bottom: 0.5rem;
+}
+.section-lead {
+  max-width: 40rem;
+  margin-bottom: 2rem;
+}
+.steps,
+.promises,
+.temple-grid {
+  list-style: none;
+  padding: 0;
+  margin: 2rem 0 0;
+  display: grid;
+  gap: 1.25rem;
+}
+.steps {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+.steps li {
+  position: relative;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--surface);
+}
+.steps h3,
+.promises h3 {
+  font-size: 1.1rem;
+  margin: 0.5rem 0 0.35rem;
+}
+.steps p,
+.promises p {
+  margin: 0;
+}
+.step-no {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--saffron);
+  color: #fff;
+  font-weight: 700;
+}
+.temple-grid {
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  margin-top: 0;
+}
+.temple-card {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--bg);
+}
+.temple-card h3 {
+  margin: 0.1rem 0 0;
+  font-size: 1.15rem;
+}
+.temple-card p {
+  margin: 0;
+}
+.graha {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.graha-dot {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin-top: 0.15rem;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+}
+.promises {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+.promises li {
+  padding-left: 1rem;
+  border-left: 3px solid var(--gold);
+}
+.cta-band {
+  background: linear-gradient(120deg, var(--maroon), #9a3412);
+  color: #fff7ed;
+  padding: 3rem 0;
+}
+@media (prefers-color-scheme: dark) {
+  .cta-band {
+    background: linear-gradient(120deg, #431407, #7c2d12);
+  }
+}
+.cta-band h2 {
+  color: #fff7ed;
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  margin: 0 0 0.35rem;
+}
+.cta-band p {
+  color: #fed7aa;
+  margin: 0;
+}
+.cta-band-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 2rem 0;
+}
+.site-footer-inner {
+  display: grid;
+  gap: 0.5rem;
+}
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+.site-footer p {
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .hero-inner {
+    grid-template-columns: 1fr;
+    padding-top: 2.5rem;
+    padding-bottom: 2.5rem;
+  }
+  .hero-art {
+    order: -1;
+  }
+  .hero-art .emblem {
+    width: 160px;
+  }
+  .site-header nav {
+    order: 3;
+    width: 100%;
+    gap: 1rem;
+    font-size: 0.9rem;
+  }
+  .band {
+    padding: 2.75rem 0;
+  }
+}
+main.plan-page {
+  max-width: 40rem;
+}
+.ops-header .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.site h1,
+.site h2,
+.site legend {
+  font-family: var(--heading-font);
+}
+.plan-form fieldset {
+  display: grid;
+  gap: 0.75rem;
 }

@@ -11,7 +11,7 @@ test('a customer requests a pilgrimage, gets a plan and books it', async ({ brow
 
   // 1. The customer fills in the request without signing in first.
   await customer.goto('/');
-  await customer.getByRole('link', { name: 'Plan My Pilgrimage' }).click();
+  await customer.getByRole('link', { name: 'Plan My Pilgrimage' }).first().click();
   await customer.getByLabel('Pickup (city or area)').fill('Chennai, Anna Nagar');
   await customer.getByLabel('How long').selectOption('2');
   await customer.getByLabel('Name', { exact: true }).fill('Meena');
