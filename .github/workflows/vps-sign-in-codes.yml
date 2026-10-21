@@ -13,22 +13,18 @@ jobs:
     timeout-minutes: 5
     environment: staging
     steps:
-      - name: Read the latest codes from the VPS
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
-        run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          if [ "$VPS_PORT" = "22" ]; then hostspec="$VPS_HOST"; else hostspec="[$VPS_HOST]:$VPS_PORT"; fi
-          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' | grep -v '^#' \
-            | sed -E "s/^[^ ]+ /$hostspec /" > ~/.ssh/known_hosts
-          echo "Latest sign-in codes (newest last; each code works once and expires quickly):"
-          ssh -p "$VPS_PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            "$VPS_USER@$VPS_HOST" "grep -h 'Sign-in code for' ~/navagraha/logs/api.log | tail -n 10" \
-            || echo "No codes yet."
-          rm -f ~/.ssh/deploy_key
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/actions
+      - uses: ./.github/actions/vps-ssh
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          user: ${{ secrets.VPS_USER }}
+          port: ${{ vars.VPS_PORT || '22' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          known-hosts: ${{ secrets.VPS_KNOWN_HOSTS }}
+      - name: Latest codes (newest last; each works once and expires quickly)
+        run: ssh vps "grep -h 'Sign-in code for' ~/navagraha/logs/api.log | tail -n 10" || echo "No codes yet."
+      - name: Clean up
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

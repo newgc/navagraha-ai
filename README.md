@@ -114,7 +114,7 @@ payment condition and every mandatory supplier item are both satisfied (FS §33)
 
 ## Hosting
 
-**Staging** (`navagrahaai.newgc.in`) runs on the InstaLeads VPS as an ordinary user, with a
+**Staging** (`navagrahayathra.in`) runs on the InstaLeads VPS as an ordinary user, with a
 free Neon PostgreSQL 16 database (test data only). Every push to `main` deploys there once CI
 is green: [docs/runbooks/vps-staging.md](docs/runbooks/vps-staging.md).
 

@@ -1,0 +1,38 @@
+# Sets up `ssh vps` for the staging VPS from the staging environment's secrets
+# (docs/runbooks/vps-staging.md). Callers remove ~/.ssh/deploy_key when done.
+name: VPS SSH
+description: Configure SSH access to the staging VPS
+inputs:
+  host: { required: true, description: VPS_HOST }
+  user: { required: true, description: VPS_USER }
+  port: { required: false, default: '22', description: VPS_PORT }
+  key: { required: true, description: VPS_SSH_KEY }
+  known-hosts: { required: true, description: VPS_KNOWN_HOSTS }
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        VPS_HOST: ${{ inputs.host }}
+        VPS_USER: ${{ inputs.user }}
+        VPS_PORT: ${{ inputs.port }}
+        VPS_SSH_KEY: ${{ inputs.key }}
+        VPS_KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        install -d -m 700 ~/.ssh
+        printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        if [ "$VPS_PORT" = "22" ]; then hostspec="$VPS_HOST"; else hostspec="[$VPS_HOST]:$VPS_PORT"; fi
+        # The key-setup command scans the server as "localhost"; relabel to the real host.
+        printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' | grep -v '^#' \
+          | sed -E "s/^[^ ]+ /$hostspec /" > ~/.ssh/known_hosts
+        cat > ~/.ssh/config <<CFG
+        Host vps
+          HostName $VPS_HOST
+          Port $VPS_PORT
+          User $VPS_USER
+          IdentityFile ~/.ssh/deploy_key
+          IdentitiesOnly yes
+          StrictHostKeyChecking yes
+          ServerAliveInterval 30
+        CFG

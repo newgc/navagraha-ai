@@ -1,4 +1,4 @@
-# Staging on the InstaLeads VPS — navagrahaai.newgc.in
+# Staging on the InstaLeads VPS — navagrahayathra.in
 
 Staging runs on the Contabo VPS in India that already hosts InstaLeads, with its database on
 Neon's free plan. **Extra cost: $0.** It runs as an ordinary user (`vaithy`), so no root is
@@ -93,26 +93,29 @@ values (step 2–3); _Deploy_ shows the last API log lines (a database error mea
 
 Send this section to whoever administers the VPS, after step 4 has run once. The first deploy
 puts the whole nginx site on the server at
-`~vaithy/navagraha/current/deploy/vps/nginx-navagrahaai.conf`; it proxies
-`navagrahaai.newgc.in` to `127.0.0.1:3100` (change the port in the copy if `WEB_PORT` was set).
+`~vaithy/navagraha/current/deploy/vps/nginx-staging.conf`; it proxies
+`navagrahayathra.in` to `127.0.0.1:3100` (change the port in the copy if `WEB_PORT` was set).
 
 ```sh
-sudo cp ~vaithy/navagraha/current/deploy/vps/nginx-navagrahaai.conf /etc/nginx/sites-available/navagrahaai.newgc.in
-sudo ln -s /etc/nginx/sites-available/navagrahaai.newgc.in /etc/nginx/sites-enabled/
+sudo cp ~vaithy/navagraha/current/deploy/vps/nginx-staging.conf /etc/nginx/sites-available/navagrahayathra.in
+sudo ln -s /etc/nginx/sites-available/navagrahayathra.in /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d navagrahaai.newgc.in     # apt install certbot python3-certbot-nginx if missing
+sudo certbot --nginx -d navagrahayathra.in     # apt install certbot python3-certbot-nginx if missing
 ```
 
 If the server uses a hosting panel instead (CloudPanel, Plesk, aaPanel, …): add a site for
-`navagrahaai.newgc.in` as a **reverse proxy to `http://127.0.0.1:3100`**, turn on Let's
+`navagrahayathra.in` as a **reverse proxy to `http://127.0.0.1:3100`**, turn on Let's
 Encrypt, allow uploads up to 10 MB, and set `X-Forwarded-For` to the visitor's address.
 
-DNS: GoDaddy → `newgc.in` → the `A` record `navagrahaai` must point to the VPS IP (it
-already does from the earlier setup — leave it).
+DNS: the domain `navagrahayathra.in` (and `www`) must have `A` records pointing to the VPS IP.
+
+If the site shows **502 Bad Gateway**, nginx is up but cannot reach the app: run **Actions →
+Staging status** — it shows whether the apps answer on 127.0.0.1 and which port nginx sends
+`navagrahayathra.in` to; the two must match (3100 unless `WEB_PORT` was set).
 
 ## 6. First sign-in
 
-1. Open `https://navagrahaai.newgc.in/sign-in` and enter your mobile number.
+1. Open `https://navagrahayathra.in/sign-in` and enter your mobile number.
 2. GitHub → **Actions → Staging sign-in codes → Run workflow** → open the run → the step
    shows `Sign-in code for +91******1234: 123456`. Enter that code (codes expire quickly).
 3. **Team** (top menu) → add your coordinators, managers, finance and content people. They

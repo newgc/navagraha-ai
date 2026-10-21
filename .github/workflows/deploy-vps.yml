@@ -1,4 +1,4 @@
-# Deploys main to the staging VPS (navagrahaai.newgc.in, next to InstaLeads) after CI passes.
+# Deploys main to the staging VPS (navagrahayathra.in, next to InstaLeads) after CI passes.
 # Runs as an ordinary user on the server — no root. Setup: docs/runbooks/vps-staging.md.
 #
 # GitHub → Settings → Environments → "staging":
@@ -67,31 +67,16 @@ jobs:
 
       - name: Set up SSH
         if: steps.settings.outputs.configured == 'true'
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
-        run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          if [ "$VPS_PORT" = "22" ]; then hostspec="$VPS_HOST"; else hostspec="[$VPS_HOST]:$VPS_PORT"; fi
-          # The key-setup command scans the server as "localhost"; relabel to the real host.
-          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' | grep -v '^#' \
-            | sed -E "s/^[^ ]+ /$hostspec /" > ~/.ssh/known_hosts
-          cat > ~/.ssh/config <<CFG
-          Host vps
-            HostName $VPS_HOST
-            Port $VPS_PORT
-            User $VPS_USER
-            IdentityFile ~/.ssh/deploy_key
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-            ServerAliveInterval 30
-          CFG
-          ssh vps 'echo "Connected to $(hostname) as $(whoami)"'
+        uses: ./.github/actions/vps-ssh
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          user: ${{ secrets.VPS_USER }}
+          port: ${{ vars.VPS_PORT || '22' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          known-hosts: ${{ secrets.VPS_KNOWN_HOSTS }}
+      - name: Check the connection
+        if: steps.settings.outputs.configured == 'true'
+        run: ssh vps 'echo "Connected to $(hostname) as $(whoami)"'
 
       - name: Build image
         if: steps.settings.outputs.configured == 'true'

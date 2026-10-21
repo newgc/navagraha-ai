@@ -1,0 +1,55 @@
+# Shows how the staging site is doing on the VPS — no server login needed:
+# the two apps under pm2, whether they answer locally, which ports nginx sends traffic to,
+# memory, and the latest log lines (sign-in codes left out). Actions → "Staging status".
+
+name: Staging status
+
+on:
+  workflow_dispatch:
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/actions
+      - uses: ./.github/actions/vps-ssh
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          user: ${{ secrets.VPS_USER }}
+          port: ${{ vars.VPS_PORT || '22' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          known-hosts: ${{ secrets.VPS_KNOWN_HOSTS }}
+      - name: Status
+        run: |
+          ssh vps 'bash -s' <<'SH'
+          N=~/navagraha; RT=$N/runtime/current
+          section() { printf '\n===== %s =====\n' "$1"; }
+          section "Release"; readlink "$N/current" || echo "none deployed"
+          section "Apps (pm2)"
+          PM2_HOME=$N/.pm2 "$RT/bin/node" "$RT/pm2/node_modules/pm2/bin/pm2" list --no-color 2>&1 || true
+          section "Answering on this server"
+          "$RT/bin/node" -e '
+            const s = require(process.argv[1]);
+            const check = async (name, port, path) => {
+              try { const r = await fetch(`http://127.0.0.1:${port}${path}`, { redirect: "manual" });
+                console.log(`${name} 127.0.0.1:${port} -> HTTP ${r.status}`); }
+              catch (e) { console.log(`${name} 127.0.0.1:${port} -> NOT ANSWERING (${e.cause?.code ?? e.message})`); }
+            };
+            (async () => { await check("web", s.WEB_PORT, "/"); await check("api", s.API_PORT, "/v1/health"); })();
+          ' "$N/shared/env.json" 2>&1 || true
+          section "Where nginx sends traffic (if readable)"
+          grep -rhoE '^\s*(server_name|proxy_pass)\s+[^;]+' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null \
+            | sed -E 's/^\s+//' | sort | uniq | head -n 60 || echo "not readable without root"
+          section "Listening ports"
+          (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | awk 'NR==1 || /127\.0\.0\.1|0\.0\.0\.0|\[::\]|\*/' | head -n 40
+          section "Memory"; free -m
+          section "API log (last 25 lines)"; grep -v 'Sign-in code for' "$N/logs/api.log" 2>/dev/null | tail -n 25
+          section "Web log (last 25 lines)"; tail -n 25 "$N/logs/web.log" 2>/dev/null
+          SH
+      - name: Clean up
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
