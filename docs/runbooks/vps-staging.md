@@ -140,21 +140,31 @@ Staging status** — it shows whether the apps answer on 127.0.0.1 and which por
    WhatsApp" and the code arrives there. If Hashwa refuses, the page says the code could not
    be sent, and **Staging status** shows Hashwa's reason in the API log.
 
-## 8. Payment links (Cashfree sandbox)
+## 8. Payment links (Razorpay test mode)
 
-Test money only — staging never uses real Cashfree keys.
+Test money only — staging never uses live Razorpay keys (the API refuses `rzp_live_` keys
+anywhere but production). Razorpay is the Navagraha merchant account; it replaces Cashfree,
+whose account is shared with InstaLeads (D-11, 22 October 2026).
 
-1. Cashfree merchant dashboard → **Payment Gateway** → **Switch to Test** → **Developers →
-   API Keys** → copy the **App ID** and **Secret Key** (test keys).
-2. GitHub → `staging` environment → **secrets** `CASHFREE_CLIENT_ID` (App ID) and
-   `CASHFREE_CLIENT_SECRET` (Secret Key).
-3. **Actions → Deploy to VPS → Run workflow.** Bookings now show **Send payment link**.
-4. Cashfree (still in Test) → **Developers → Webhooks → Add Webhook Endpoint**:
-   `https://navagrahayathra.in/webhooks/cashfree`, latest version, **Test**, then select the
-   **payment** events (success, failed, user dropped) and the **refund** events.
-5. Try it: send a link on a test booking, open it on your phone, pay with Cashfree's test UPI
-   or card details, and watch the payment turn **Success** within a few seconds. If it does
-   not, **Check payment status** on the booking reads it from Cashfree directly.
+1. Razorpay Dashboard → switch to **Test Mode** (top bar) → **Account & Settings → API Keys →
+   Generate Test Key**. Copy the **Key ID** (starts `rzp_test_`) and the **Key Secret**.
+2. Still in Test Mode → **Account & Settings → Webhooks → Add New Webhook**:
+   - Webhook URL: `https://navagrahayathra.in/webhooks/razorpay`
+   - Secret: make up a long random password and keep it for the next step
+   - Active events: `payment_link.paid`, `payment_link.expired`, `payment_link.cancelled`,
+     `refund.processed`, `refund.failed`
+3. GitHub → `staging` environment → **secrets** `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and
+   `RAZORPAY_WEBHOOK_SECRET` (the webhook secret from step 2).
+4. **Actions → Deploy to VPS → Run workflow.** Bookings now show **Send payment link**, and
+   links are Razorpay links. When Razorpay keys are set they win over any Cashfree keys.
+5. Try it: send a link on a test booking, open it on your phone, pay with the test details
+   Razorpay shows in Test Mode, and watch the payment turn **Success** within a few seconds.
+   If it does not, **Check payment status** on the booking reads it from Razorpay directly.
+   Refunds work the same way: ask, a second person approves, Razorpay confirms.
+
+Links and payments made through Cashfree before the switch: an open Cashfree link stops
+holding the balance at the next check (Razorpay does not know it); refund a Cashfree payment
+with **Record a refund paid outside Razorpay**. The old `CASHFREE_*` secrets can be deleted.
 
 ---
 

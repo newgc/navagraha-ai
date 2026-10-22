@@ -1,4 +1,4 @@
-// Where Cashfree sends the customer after paying through a link (D-11). It never records a
+// Where the payment gateway sends the customer after paying through a link (D-11). It never records a
 // payment: only the gateway's own records do (FS §11.2), so this page only says what happens next.
 import Link from 'next/link';
 import { SitePage } from '@/components/site-header';

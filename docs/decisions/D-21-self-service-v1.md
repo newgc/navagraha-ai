@@ -23,8 +23,8 @@
    proposal: itinerary and quote prepared by the coordinator, `PROPOSED → ACCEPTED` and
    `PRESENTED → LOCKED` by the **customer** (`acceptedVia: WEB`), booking created by the
    customer, lead `QUOTED → CONVERTED`. From here it is an ordinary booking.
-4. **Pay.** **Pay now** opens the Cashfree payment link for the balance (reusing an open one);
-   payment is recorded only from Cashfree's records (D-11). The customer sees how many
+4. **Pay.** **Pay now** opens the payment link (Razorpay) for the balance (reusing an open one);
+   payment is recorded only from the gateway's records (D-11). The customer sees how many
    arrangements are confirmed, never supplier names or references.
 
 Nothing in this flow invents a plan, price, timing or availability (NAV-AI-007): every plan

@@ -19,10 +19,16 @@ import type { AuthContext } from '../auth/auth.types.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { DB } from '../db/db.module.js';
 import { WHATSAPP, type WhatsAppMessenger } from '../messaging/whatsapp.js';
-import { PAYMENT_GATEWAY, type GatewayCapture, type PaymentGateway } from '../payments/gateway.js';
+import {
+  GatewayError,
+  PAYMENT_GATEWAY,
+  type GatewayCapture,
+  type GatewayLink,
+  type PaymentGateway,
+} from '../payments/gateway.js';
 import { systemActor, TransitionService, type Actor } from '../state/transition.service.js';
 import { BookingCore, OPEN_STATES } from './booking-core.js';
-import { GatewayRefundsService, refundIdOf } from './gateway-refunds.service.js';
+import { GatewayRefundsService } from './gateway-refunds.service.js';
 
 const { booking, payment, appUser, gatewayEvent } = schema;
 
@@ -35,7 +41,7 @@ const RECONCILE_EVERY_MS = 10 * 60_000;
 export type LinkDelivery = 'WHATSAPP' | 'NOT_SENT';
 
 /**
- * Payment links through the gateway (D-11 Cashfree, FS §11.2, MR-19, EC-22–EC-25).
+ * Payment links through the gateway (D-11 Razorpay or Cashfree, FS §11.2, MR-19, EC-22–EC-25).
  *
  * Money is only ever recorded from the gateway's own API: a webhook (verified, stored once)
  * just triggers a reconciliation that reads the link's paid orders and their payments. A
@@ -186,7 +192,7 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
       await this.whatsapp.sendText(
         booker.phone,
         `${greeting}\n\nPlease pay ₹${rupees} for your Navagraha pilgrimage booking ${b.reference}:\n${url}\n\n` +
-          `This secure link (Cashfree) works until ${until}. Your booking is confirmed once ` +
+          `This secure link (${gateway.label}) works until ${until}. Your booking is confirmed once ` +
           'the payment is received and every arrangement is in place.',
       );
     } catch (err) {
@@ -270,15 +276,28 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
     const p = await this.linkPayment(paymentId);
     if (p.state !== 'PENDING' && p.state !== 'FAILED') return { state: p.state, changed: false };
 
-    let link;
+    let link: GatewayLink;
     let captures: GatewayCapture[];
     try {
       link = await gateway.getLink(p.gatewayLinkId!);
       captures = await gateway.successfulPayments(p.gatewayLinkId!);
     } catch (err) {
-      throw new BadGatewayException(
-        `Could not read the payment from the gateway: ${(err as Error).message}`,
-      );
+      // The gateway has never heard of the link (e.g. one made through the gateway used before
+      // a switch): it cannot be paid there, so it stops holding the balance.
+      if (err instanceof GatewayError && err.status === 404) {
+        link = {
+          linkId: p.gatewayLinkId!,
+          url: '',
+          status: 'CANCELLED',
+          amountPaidPaise: 0,
+          raw: null,
+        };
+        captures = [];
+      } else {
+        throw new BadGatewayException(
+          `Could not read the payment from the gateway: ${(err as Error).message}`,
+        );
+      }
     }
     const capturedPaise = captures.reduce((sum, c) => sum + c.amountPaise, 0);
 
@@ -390,11 +409,16 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
    * (NFR-06) and reconciles afterwards. Returns false when the signature does not match.
    */
   async receiveWebhook(
+    provider: string,
     rawBody: Buffer,
     headers: Record<string, string | undefined>,
     correlationId: string,
   ): Promise<boolean> {
     const gateway = this.requireGateway();
+    // Webhooks for a gateway we are not using (e.g. one left configured after a switch).
+    if (provider !== gateway.provider) {
+      throw new NotFoundException(`Payments go through ${gateway.label}, not ${provider}`);
+    }
     if (!gateway.verifyWebhook(rawBody, headers)) {
       await this.audit.record({
         action: 'security.webhook_signature_invalid',
@@ -410,15 +434,15 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
     } catch {
       payload = { unparsed: rawBody.toString('utf8').slice(0, 10_000) };
     }
-    const linkId = linkIdOf(payload);
-    const eventKey =
-      headers['x-idempotency-key'] ?? createHash('sha256').update(rawBody).digest('hex');
+    const event = gateway.webhookEvent(payload, headers);
+    const linkId = event.linkId;
+    const eventKey = event.eventKey ?? createHash('sha256').update(rawBody).digest('hex');
     const [stored] = await this.db
       .insert(gatewayEvent)
       .values({
         provider: gateway.provider,
         eventKey,
-        eventType: typeof payload.type === 'string' ? payload.type : null,
+        eventType: event.eventType,
         linkId,
         payload,
       })
@@ -427,7 +451,7 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
     // A repeat delivery: already handled (NFR-09).
     if (!stored) return true;
 
-    const refundId = refundIdOf(payload);
+    const refundId = event.refundId;
     setImmediate(() => void this.processEvent(stored.id, linkId, refundId, correlationId));
     return true;
   }
@@ -476,18 +500,4 @@ export class PaymentLinksService implements OnModuleInit, OnModuleDestroy {
   async bookingOf(paymentId: string) {
     return (await this.linkPayment(paymentId)).bookingId;
   }
-}
-
-/**
- * Our link id from a Cashfree webhook: payment webhooks carry it in order_tags
- * (2025-01-01+), payment-link webhooks at data.link_id. Only `nav_` ids are ours.
- */
-export function linkIdOf(payload: Record<string, unknown>): string | null {
-  const data = (payload.data ?? {}) as Record<string, unknown>;
-  const order = (data.order ?? {}) as Record<string, unknown>;
-  const tags = (order.order_tags ?? {}) as Record<string, unknown>;
-  for (const candidate of [tags.link_id, data.link_id]) {
-    if (typeof candidate === 'string' && /^nav_[0-9a-f]{32}$/.test(candidate)) return candidate;
-  }
-  return null;
 }

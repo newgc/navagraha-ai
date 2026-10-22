@@ -23,6 +23,7 @@ const SECRET = 'cashfree-test-secret';
 /** Stands in for Cashfree: links and captures live in memory; signatures are the real scheme. */
 class FakeGateway implements PaymentGateway {
   readonly provider = 'cashfree' as const;
+  readonly label = 'Cashfree';
   readonly links = new Map<string, GatewayLink & { input: CreateLinkInput }>();
   readonly captures = new Map<string, GatewayCapture[]>();
   readonly refunds = new Map<string, GatewayRefund & { input: CreateRefundInput }>();
@@ -89,6 +90,9 @@ class FakeGateway implements PaymentGateway {
   }
   verifyWebhook(rawBody: Buffer, headers: Record<string, string | undefined>) {
     return this.signer.verifyWebhook(rawBody, headers);
+  }
+  webhookEvent(payload: Record<string, unknown>, headers: Record<string, string | undefined>) {
+    return this.signer.webhookEvent(payload, headers);
   }
 
   pay(linkId: string, paise: number, id = 'cf_pay_1') {
@@ -297,6 +301,14 @@ describe.skipIf(!url)('payment links through the gateway (D-11, MR-19, EC-25)', 
     const d = await detail(b.reference);
     expect(d.payment.items[0]).toMatchObject({ state: 'FAILED', method: 'GATEWAY' });
     await sendLink(b.reference).expect(201);
+  });
+
+  it('refuses webhooks addressed to a gateway that is not in use', async () => {
+    await http()
+      .post('/v1/payments/webhook/razorpay')
+      .set('content-type', GATEWAY_WEBHOOK_TYPE)
+      .send('{}')
+      .expect(404);
   });
 
   it('refuses amounts above the balance due', async () => {

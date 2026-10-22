@@ -40,7 +40,7 @@ const FINAL_FAILURE = ['CANCELLED', 'REJECTED'];
 type RefundRow = typeof refund.$inferSelect;
 
 /**
- * Refunds through the payment gateway (D-11 Cashfree, D-04 §2.2, D-19 extension).
+ * Refunds through the payment gateway (D-11 Razorpay or Cashfree, D-04 §2.2, D-19 extension).
  *
  * 1. Finance or a manager asks for a refund to the customer's online payment (INITIATED).
  * 2. A different Finance / manager user approves it; only then is it sent to the gateway.
@@ -126,7 +126,7 @@ export class GatewayRefundsService {
         initiatedByUserId: auth.userId,
         reason: input.reason,
         paymentId: source.payment.id,
-        // Cashfree: 3–40 alphanumeric characters.
+        // Cashfree refund id / Razorpay receipt: 3–40 alphanumeric characters.
         gatewayRefundId: `r${id.replaceAll('-', '')}`,
       });
       await this.transitions.created(tx, refundMachine, id, 'INITIATED', this.actor(auth), {
@@ -367,13 +367,4 @@ export class GatewayRefundsService {
   private actor(auth: AuthContext): Actor {
     return { userId: auth.userId, roles: inActingOrder(auth.roles) };
   }
-}
-
-/** Our refund id from a Cashfree refund webhook (data.refund.refund_id). */
-export function refundIdOf(payload: Record<string, unknown>): string | null {
-  const data = (payload.data ?? {}) as Record<string, unknown>;
-  const r = (data.refund ?? {}) as Record<string, unknown>;
-  return typeof r.refund_id === 'string' && /^r[0-9a-f]{32}$/.test(r.refund_id)
-    ? r.refund_id
-    : null;
 }

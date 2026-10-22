@@ -45,6 +45,7 @@ function proposal(totalLines = manualBooking().quote.lines) {
 
 class LinkOnlyGateway implements PaymentGateway {
   readonly provider = 'cashfree' as const;
+  readonly label = 'Cashfree';
   readonly links: CreateLinkInput[] = [];
   async createLink(input: CreateLinkInput): Promise<GatewayLink> {
     this.links.push(input);
@@ -70,6 +71,7 @@ class LinkOnlyGateway implements PaymentGateway {
     throw new Error('unused');
   };
   verifyWebhook = () => false;
+  webhookEvent = () => ({ eventKey: null, eventType: null, linkId: null, refundId: null });
 }
 
 describe.skipIf(!url)('self-service trip requests (request → proposal → accept → pay)', () => {

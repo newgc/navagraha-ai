@@ -1,6 +1,5 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { linkIdOf } from '../src/bookings/payment-links.service.js';
 import { CashfreeGateway, istIso, toPaise, toRupees } from '../src/payments/gateway.js';
 
 type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
@@ -191,11 +190,24 @@ describe('Cashfree gateway (D-11)', () => {
     expect(g.verifyWebhook(body, {})).toBe(false);
   });
 
-  it('finds our link id in payment and payment-link webhooks only', () => {
+  it('finds our link and refund ids in webhooks only when they are ours', () => {
+    const g = gateway(fakeFetch({}).fetch);
+    const linkIdOf = (p: Record<string, unknown>) => g.webhookEvent(p, {}).linkId;
     const id = `nav_${'a'.repeat(32)}`;
     expect(linkIdOf({ data: { order: { order_tags: { link_id: id } } } })).toBe(id);
     expect(linkIdOf({ data: { link_id: id } })).toBe(id);
     expect(linkIdOf({ data: { order: { order_tags: { link_id: 'someone_else' } } } })).toBeNull();
     expect(linkIdOf({})).toBeNull();
+    const refund = `r${'b'.repeat(32)}`;
+    const e = g.webhookEvent(
+      { type: 'REFUND_STATUS_WEBHOOK', data: { refund: { refund_id: refund } } },
+      { 'x-idempotency-key': 'k1' },
+    );
+    expect(e).toEqual({
+      eventKey: 'k1',
+      eventType: 'REFUND_STATUS_WEBHOOK',
+      linkId: null,
+      refundId: refund,
+    });
   });
 });

@@ -108,6 +108,7 @@ interface Booking {
       } | null;
     }[];
     gatewayEnabled: boolean;
+    gatewayName: string | null;
   };
   fulfilment: {
     state: string;
@@ -476,9 +477,9 @@ export default async function BookingPage({ params }: { params: Promise<{ refere
             <details>
               <summary>Send a payment link</summary>
               <p className="muted small">
-                Creates a secure Cashfree link (UPI, cards, netbanking) and sends it to the booker
-                on WhatsApp. The payment is recorded when Cashfree confirms it — nobody needs to
-                confirm it by hand.
+                Creates a secure {b.payment.gatewayName} link (UPI, cards, netbanking) and sends it
+                to the booker on WhatsApp. The payment is recorded when {b.payment.gatewayName}{' '}
+                confirms it — nobody needs to confirm it by hand.
               </p>
               <ActionForm
                 action={sendPaymentLink.bind(null, b.reference)}

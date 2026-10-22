@@ -3,7 +3,7 @@
 |            |                                                                                |
 | ---------- | ------------------------------------------------------------------------------ |
 | Decision   | Which payment gateway, and how customers pay online                            |
-| Status     | **Decided** by the Product Owner, 21 October 2026                              |
+| Status     | **Superseded** 22 October 2026 by Razorpay (D-11-payment-gateway-razorpay.md)  |
 | Relates to | D-11 (vendors), FS §11.2, §32, MR-19, NFR-06, NFR-09, EC-22–EC-26, D-04 §2.2   |
 | Scope      | Payment links for concierge bookings. Website checkout comes with self-service |
 

@@ -172,8 +172,7 @@ export default async function TripPage({
           <ActionForm action={payNow.bind(null, b.reference)} label="Pay now" />
         )}
         <p className="small muted">
-          Secure payment by Cashfree (UPI, cards, netbanking). It shows here a few seconds after you
-          pay.
+          Secure online payment (UPI, cards, netbanking). It shows here a few seconds after you pay.
         </p>
       </section>
       <section className="card">

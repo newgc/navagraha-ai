@@ -100,4 +100,25 @@ describe('loadConfig', () => {
     expect(() => loadConfig(prod)).toThrow(/production keys/);
     expect(loadConfig({ ...prod, CASHFREE_ENV: 'production' }).CASHFREE_ENV).toBe('production');
   });
+
+  it('Razorpay needs keys, and test and live keys never cross deployments', () => {
+    const rz = { ...base, PAYMENT_GATEWAY: 'razorpay' };
+    expect(() => loadConfig(rz)).toThrow(/RAZORPAY_KEY_ID.*RAZORPAY_KEY_SECRET/s);
+    const keys = { ...rz, RAZORPAY_KEY_ID: ' rzp_test_abc\n', RAZORPAY_KEY_SECRET: 's' };
+    expect(loadConfig(keys).RAZORPAY_KEY_ID).toBe('rzp_test_abc');
+    expect(() => loadConfig({ ...keys, RAZORPAY_KEY_ID: 'abc' })).toThrow(/rzp_test_/);
+    expect(() => loadConfig({ ...keys, RAZORPAY_KEY_ID: 'rzp_live_abc' })).toThrow(/DEPLOY_ENV/);
+    const prod = {
+      ...keys,
+      NODE_ENV: 'production',
+      DEPLOY_ENV: 'production',
+      OTP_SENDER: 'whatsapp',
+      WHATSAPP_API_SECRET: 's',
+      WHATSAPP_ACCOUNT: 'a',
+    };
+    expect(() => loadConfig(prod)).toThrow(/live keys/);
+    expect(loadConfig({ ...prod, RAZORPAY_KEY_ID: 'rzp_live_abc' }).PAYMENT_GATEWAY).toBe(
+      'razorpay',
+    );
+  });
 });

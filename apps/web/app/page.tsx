@@ -57,7 +57,7 @@ const PROMISES = [
   },
   {
     title: 'Transparent price',
-    text: 'Every line of the price is shown before you book, and payments are handled securely by Cashfree.',
+    text: 'Every line of the price is shown before you book, and payments are handled securely online.',
   },
 ];
 

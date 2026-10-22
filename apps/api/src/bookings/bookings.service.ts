@@ -47,6 +47,8 @@ import type {
   StopsInput,
 } from './booking.schemas.js';
 
+const GATEWAY_NAMES: Record<string, string> = { razorpay: 'Razorpay', cashfree: 'Cashfree' };
+
 const { booking, itinerary, quote, payment, fulfilmentComponent: component, trip } = schema;
 
 /** An agreed plan to turn into a booking (see BookingsService.createBooking). */
@@ -512,6 +514,8 @@ export class BookingsService {
         })),
         /** D-11: whether "Send payment link" is available on this server. */
         gatewayEnabled: this.config.PAYMENT_GATEWAY !== 'none',
+        /** Shown on screens: "Razorpay" or "Cashfree" (null without a gateway). */
+        gatewayName: GATEWAY_NAMES[this.config.PAYMENT_GATEWAY] ?? null,
       },
       fulfilment: {
         state: fulfilmentState,
@@ -548,6 +552,7 @@ export class BookingsService {
         /** How much more may be recorded as refunded right now. */
         duePaise: Math.max(0, room.limit),
         /** D-11: the most one refund through the gateway can return (one online payment). */
+        gatewayName: GATEWAY_NAMES[this.config.PAYMENT_GATEWAY] ?? null,
         gatewayRefundablePaise:
           this.config.PAYMENT_GATEWAY === 'none'
             ? 0

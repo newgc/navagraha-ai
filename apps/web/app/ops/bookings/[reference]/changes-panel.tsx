@@ -47,7 +47,9 @@ export interface Cancellation {
 
 export interface Refunds {
   duePaise: number;
-  /** The most one refund through Cashfree can return (0 without an online payment). */
+  /** The payment gateway refunds go through, e.g. "Razorpay" (null without one). */
+  gatewayName: string | null;
+  /** The most one refund through the gateway can return (0 without an online payment). */
   gatewayRefundablePaise: number;
   items: {
     id: string;
@@ -348,6 +350,7 @@ export function RefundsBlock({
   myId: string | null;
 }) {
   if (refunds.items.length === 0 && refunds.duePaise === 0) return null;
+  const gw = refunds.gatewayName ?? 'the payment gateway';
   return (
     <div className="refunds">
       <h3>Refunds</h3>
@@ -360,7 +363,7 @@ export function RefundsBlock({
         {refunds.items.map((r) => (
           <li key={r.id} className="payment">
             {formatRupees(r.amountPaise)} ·{' '}
-            {r.gateway ? 'Through Cashfree' : (PAYMENT_METHODS[r.method] ?? humanize(r.method))}
+            {r.gateway ? `Through ${gw}` : (PAYMENT_METHODS[r.method] ?? humanize(r.method))}
             {r.reference && ` · ${r.reference}`}{' '}
             {r.paidOn && <span className="muted small">paid {formatDate(r.paidOn)}</span>}{' '}
             <Badge state={r.state} />
@@ -371,6 +374,7 @@ export function RefundsBlock({
                 refund={r}
                 canHandle={canHandle}
                 myId={myId}
+                gw={gw}
               />
             )}
             {!r.gateway && r.state === 'INITIATED' && canHandle && r.initiatedBy !== myId && (
@@ -405,10 +409,10 @@ export function RefundsBlock({
       </ul>
       {canHandle && refunds.duePaise > 0 && refunds.gatewayRefundablePaise > 0 && (
         <details>
-          <summary>Refund through Cashfree</summary>
+          <summary>Refund through {gw}</summary>
           <p className="muted small">
             Sends the money back to the customer&apos;s online payment. Someone else in Finance or a
-            manager approves it before anything is sent; it is marked refunded when Cashfree
+            manager approves it before anything is sent; it is marked refunded when {gw}
             confirms.
           </p>
           <ActionForm action={requestGatewayRefund.bind(null, reference)} label="Ask for refund">
@@ -422,7 +426,7 @@ export function RefundsBlock({
               />
             </label>
             <label>
-              Reason (shown to Cashfree)
+              Reason (shown to {gw})
               <input name="reason" required placeholder="e.g. cancelled more than 7 days before" />
             </label>
           </ActionForm>
@@ -430,7 +434,7 @@ export function RefundsBlock({
       )}
       {canHandle && refunds.duePaise > 0 && (
         <details>
-          <summary>Record a refund paid outside Cashfree</summary>
+          <summary>Record a refund paid outside {gw}</summary>
           <ActionForm action={recordRefund.bind(null, reference)} label="Record refund">
             <label>
               Method
@@ -475,11 +479,13 @@ function GatewayRefundStatus({
   refund: r,
   canHandle,
   myId,
+  gw,
 }: {
   reference: string;
   refund: Refunds['items'][number];
   canHandle: boolean;
   myId: string | null;
+  gw: string;
 }) {
   const g = r.gateway!;
   if (!g.approvedBy) {
@@ -494,7 +500,7 @@ function GatewayRefundStatus({
           <div className="row">
             <ActionForm
               action={approveGatewayRefund.bind(null, reference, r.id)}
-              label="Approve and send to Cashfree"
+              label={`Approve and send to ${gw}`}
               inline
             />
             <ActionForm
@@ -513,7 +519,7 @@ function GatewayRefundStatus({
   if (!g.sentAt) {
     return (
       <div>
-        <p className="muted small">Approved, but Cashfree could not be reached. Send it again.</p>
+        <p className="muted small">Approved, but {gw} could not be reached. Send it again.</p>
         {canHandle && (
           <ActionForm
             action={sendGatewayRefund.bind(null, reference, r.id)}
@@ -528,8 +534,8 @@ function GatewayRefundStatus({
   return (
     <div>
       <p className="muted small">
-        Sent to Cashfree ({humanize(g.status)}). It is marked refunded when Cashfree confirms; bank
-        refunds can take a few working days.
+        Sent to {gw} ({humanize(g.status)}). It is marked refunded when {gw} confirms; bank refunds
+        can take a few working days.
       </p>
       {canHandle && (
         <ActionForm

@@ -279,16 +279,29 @@ export class PaymentsController {
 /**
  * FS §32 POST /payments/webhook — gateway notifications. Public, but only signed requests are
  * accepted. The API is not on the internet: the website forwards the raw body here unchanged
- * (apps/web/app/webhooks/cashfree/route.ts) with the gateway's signature headers.
+ * (apps/web/app/webhooks/[provider]/route.ts) with the gateway's signature headers.
  */
+/** Signature and delivery-id headers of Cashfree and Razorpay webhooks. */
+const WEBHOOK_HEADERS = [
+  'x-webhook-signature',
+  'x-webhook-timestamp',
+  'x-idempotency-key',
+  'x-razorpay-signature',
+  'x-razorpay-event-id',
+];
+
 @Controller('payments/webhook')
 export class PaymentWebhooksController {
   constructor(@Inject(PaymentLinksService) private readonly links: PaymentLinksService) {}
 
   @Public()
-  @Post('cashfree')
+  @Post(':provider')
   @HttpCode(200)
-  async cashfree(@Body() body: unknown, @Req() req: AuthedRequest) {
+  async receive(
+    @Param('provider') provider: string,
+    @Body() body: unknown,
+    @Req() req: AuthedRequest,
+  ) {
     if (!Buffer.isBuffer(body)) {
       throw new BadRequestException(`Send the raw body as ${GATEWAY_WEBHOOK_TYPE}`);
     }
@@ -297,12 +310,9 @@ export class PaymentWebhooksController {
       return Array.isArray(v) ? v[0] : v;
     };
     const ok = await this.links.receiveWebhook(
+      provider,
       body,
-      {
-        'x-webhook-signature': header('x-webhook-signature'),
-        'x-webhook-timestamp': header('x-webhook-timestamp'),
-        'x-idempotency-key': header('x-idempotency-key'),
-      },
+      Object.fromEntries(WEBHOOK_HEADERS.map((name) => [name, header(name)])),
       req.correlationId,
     );
     if (!ok) throw new UnauthorizedException('Signature does not match');

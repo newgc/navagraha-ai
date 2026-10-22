@@ -35,7 +35,12 @@ const EnvSchema = z
      */
     BOOTSTRAP_ADMIN_PHONES: z.string().optional(),
     /** Payment gateway for payment links (D-11). `none` hides the "Send payment link" action. */
-    PAYMENT_GATEWAY: z.enum(['none', 'cashfree']).default('none'),
+    PAYMENT_GATEWAY: z.enum(['none', 'razorpay', 'cashfree']).default('none'),
+    /** rzp_test_… takes no real money; only DEPLOY_ENV=production may use rzp_live_… keys. */
+    RAZORPAY_KEY_ID: z.string().trim().min(1).optional(),
+    RAZORPAY_KEY_SECRET: z.string().trim().min(1).optional(),
+    /** Chosen when adding the webhook in the Razorpay dashboard; signs its webhooks. */
+    RAZORPAY_WEBHOOK_SECRET: z.string().trim().min(1).optional(),
     /** `sandbox` takes no real money; only DEPLOY_ENV=production may use `production`. */
     CASHFREE_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
     CASHFREE_CLIENT_ID: z.string().trim().min(1).optional(),
@@ -66,6 +71,37 @@ const EnvSchema = z
         if (!env[key]) {
           ctx.addIssue({ code: 'custom', path: [key], message: 'is required for WhatsApp codes' });
         }
+      }
+    }
+    if (env.PAYMENT_GATEWAY === 'razorpay') {
+      for (const key of ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({ code: 'custom', path: [key], message: 'is required for Razorpay' });
+        }
+      }
+      const live = env.RAZORPAY_KEY_ID?.startsWith('rzp_live_');
+      const test = env.RAZORPAY_KEY_ID?.startsWith('rzp_test_');
+      // Real money only on the production deployment, and never test money there.
+      if (env.RAZORPAY_KEY_ID && !live && !test) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['RAZORPAY_KEY_ID'],
+          message: 'should start with rzp_test_ or rzp_live_',
+        });
+      }
+      if (live && env.DEPLOY_ENV !== 'production') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['RAZORPAY_KEY_ID'],
+          message: 'live keys may only be used when DEPLOY_ENV is production',
+        });
+      }
+      if (test && env.DEPLOY_ENV === 'production') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['RAZORPAY_KEY_ID'],
+          message: 'the production deployment must use live keys',
+        });
       }
     }
     if (env.PAYMENT_GATEWAY === 'cashfree') {

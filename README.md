@@ -122,8 +122,8 @@ is green: [docs/runbooks/vps-staging.md](docs/runbooks/vps-staging.md).
 Customers request a pilgrimage at `/plan`, operations send a plan and price, and the customer
 accepts and pays at `/trips` (D-21, `docs/decisions/D-21-self-service-v1.md`).
 
-Online payments are Cashfree payment links sent on WhatsApp; only Cashfree's own records mark
-a link paid (D-11, `docs/decisions/D-11-payment-gateway-cashfree.md`).
+Online payments are Razorpay payment links sent on WhatsApp (Cashfree remains a setting); only
+the gateway's own records mark a link paid (D-11, `docs/decisions/D-11-payment-gateway-razorpay.md`).
 
 **Production** is planned on AWS Lightsail with an encrypted database in Mumbai (MR-37):
 [docs/runbooks/aws-lightsail.md](docs/runbooks/aws-lightsail.md).
