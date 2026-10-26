@@ -4,7 +4,7 @@
 | ---------- | ----------------------------------------------------------------------------------- |
 | Purpose    | Phase 0 of the V2 Feature Expansion brief: what exists, what V2 adds, in what order |
 | Baseline   | `main` at `be6a2b8` (22 Oct 2026), deployed to https://navagrahayathra.in           |
-| Status     | **Audit only — no production code changed.** Awaiting Product Owner review          |
+| Status     | Audit approved 26 Oct 2026 (D-23); S1 built                                         |
 | Relates to | FS V1.1 (`docs/spec/functional-spec-v1.1.md`), D-04, D-11, D-19…D-22, delivery plan |
 
 > **Important correction to the brief:** navagrahayathra.in is the **staging** deployment
@@ -285,17 +285,17 @@ Legend: ✅ exists · ⚠️ partial · ❌ missing.
 
 ## 17. Sprint breakdown (2-week sprints)
 
-| Sprint | Phase | Deliverable                                                                                                                                                                                     | Needs from the PO                            |
-| ------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| S1     | 1     | Field-level sources and confidence, conflict detection, STALE rule, **Data Verification Queue**, source priority, extra temple fields, pooja catalogue screen                                   | Source priority confirmed                    |
-| S2     | 2     | TripRequest v2 (arrival/departure, food, poojas, origin), "Let us recommend" duration, 3D2N, arrival-aware engine, wider senior rules, date insights (labelled tradition), DecisionRecord kinds | Senior rule values; date rules content       |
-| S3     | 3     | Package × Tier, versioned rate cards, deterministic quote engine, "Why this price", Compare plans, proposals priced by the engine                                                               | **D-07 GST, D-08 rates and tier inclusions** |
-| S4     | 2     | Smart AI planner (LLM adapter, structured output, missing-field questions, eval set, injection defence, fallback)                                                                               | **LLM vendor + API key (D-11)**              |
-| S5     | 4     | Operations control centre: today's trips, vehicle/driver/hotel records and assignment, trip event timeline, tasks, separate payment/fulfilment summaries                                        | Vehicle/driver list                          |
-| S6     | 5     | Customer itinerary/quote screen V2, pre-trip checklist, live journey (staff/driver driven), passport + certificate, Send My Parents with consent                                                | Certificate wording                          |
-| S7     | 6     | Notification outbox, opt-in, the lifecycle messages, delivery log                                                                                                                               | **WhatsApp BSP decision**, message texts     |
-| S8     | 4     | Live replanning: re-plan from the current stop, ops approval, customer notification                                                                                                             | —                                            |
-| S9     | 7     | Analytics dashboard, market rate observations, city landing pages (content reviewed by the PO)                                                                                                  | Page content sign-off                        |
+| Sprint | Phase | Deliverable                                                                                                                                                                                          | Needs from the PO                            |
+| ------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| S1     | 1     | ✅ (D-23, except new workbook columns) Field-level sources and confidence, conflict detection, STALE rule, **Data Verification Queue**, source priority, extra temple fields, pooja catalogue screen | Source priority confirmed                    |
+| S2     | 2     | TripRequest v2 (arrival/departure, food, poojas, origin), "Let us recommend" duration, 3D2N, arrival-aware engine, wider senior rules, date insights (labelled tradition), DecisionRecord kinds      | Senior rule values; date rules content       |
+| S3     | 3     | Package × Tier, versioned rate cards, deterministic quote engine, "Why this price", Compare plans, proposals priced by the engine                                                                    | **D-07 GST, D-08 rates and tier inclusions** |
+| S4     | 2     | Smart AI planner (LLM adapter, structured output, missing-field questions, eval set, injection defence, fallback)                                                                                    | **LLM vendor + API key (D-11)**              |
+| S5     | 4     | Operations control centre: today's trips, vehicle/driver/hotel records and assignment, trip event timeline, tasks, separate payment/fulfilment summaries                                             | Vehicle/driver list                          |
+| S6     | 5     | Customer itinerary/quote screen V2, pre-trip checklist, live journey (staff/driver driven), passport + certificate, Send My Parents with consent                                                     | Certificate wording                          |
+| S7     | 6     | Notification outbox, opt-in, the lifecycle messages, delivery log                                                                                                                                    | **WhatsApp BSP decision**, message texts     |
+| S8     | 4     | Live replanning: re-plan from the current stop, ops approval, customer notification                                                                                                                  | —                                            |
+| S9     | 7     | Analytics dashboard, market rate observations, city landing pages (content reviewed by the PO)                                                                                                       | Page content sign-off                        |
 
 S9's landing pages have no dependencies and can move earlier if marketing needs them.
 

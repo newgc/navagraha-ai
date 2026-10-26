@@ -70,6 +70,13 @@ describe.skipIf(!url)('temple data admin (NAV-TEM-001..003, MR-47..51)', () => {
       { check: 'Temples with verified opening hours in force today', done: 0, of: 9, ok: false },
       { check: 'Travel times verified between every pair of temples', done: 0, of: 36, ok: false },
       { check: 'Verified facts due for a re-check', done: 0, of: 0, lowerIsBetter: true, ok: true },
+      {
+        check: 'Facts with disagreeing sources (V2 §26)',
+        done: 0,
+        of: 0,
+        lowerIsBetter: true,
+        ok: true,
+      },
     ]);
   });
 

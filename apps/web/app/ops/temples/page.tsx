@@ -67,6 +67,9 @@ export default async function TempleDataPage() {
             master copy; only facts marked Verified are shown to customers as fact.
           </p>
         </div>
+        <Link href="/ops/temples/queue" className="button-link">
+          Data verification queue
+        </Link>
       </div>
 
       <section className="card">

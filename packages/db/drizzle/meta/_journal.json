@@ -64,6 +64,13 @@
       "when": 1792600436923,
       "tag": "0008_decision_records",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793004944856,
+      "tag": "0009_fact_checks",
+      "breakpoints": true
     }
   ]
 }

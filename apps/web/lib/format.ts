@@ -65,11 +65,13 @@ export function tone(state: string): 'good' | 'warn' | 'bad' | 'neutral' {
       'LOCKED',
       'ACCEPTED',
       'SCHEDULED',
+      'OPERATIONAL_CONFIRMED',
     ].includes(state)
   ) {
     return 'good';
   }
-  if (['CANCELLED', 'FAILED', 'DECLINED', 'EXPIRED', 'INCIDENT'].includes(state)) return 'bad';
+  if (['CANCELLED', 'FAILED', 'DECLINED', 'EXPIRED', 'INCIDENT', 'CONFLICTING'].includes(state))
+    return 'bad';
   if (
     [
       'PENDING',
@@ -78,6 +80,8 @@ export function tone(state: string): 'good' | 'warn' | 'bad' | 'neutral' {
       'PARTIAL',
       'NEEDS_RECHECK',
       'COLLECTED',
+      'STALE',
+      'ESTIMATED',
     ].includes(state)
   ) {
     return 'warn';

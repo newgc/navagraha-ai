@@ -13,6 +13,7 @@ import {
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { DB } from '../db/db.module.js';
+import { FactChecksService } from '../temple-data/fact-checks.service.js';
 
 const { circuit, circuitTemple, temple, place, templeSchedule, templeSpecialDay, travelTime } =
   schema;
@@ -26,7 +27,10 @@ const VERIFIED = 'VERIFIED' as const;
  */
 @Injectable()
 export class PlannerService {
-  constructor(@Inject(DB) private readonly db: Database) {}
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    @Inject(FactChecksService) private readonly checks: FactChecksService,
+  ) {}
 
   /** Places a trip can start or end at (hub town, common origins). */
   async places() {
@@ -49,7 +53,7 @@ export class PlannerService {
       .where(eq(circuitTemple.circuitId, circ.id))
       .orderBy(asc(circuitTemple.displayOrder));
     const ids = temples.map(({ t }) => t.id);
-    const [places, schedules, specials, travel] = await Promise.all([
+    const [places, allSchedules, allSpecials, allTravel] = await Promise.all([
       this.db.select().from(place),
       ids.length
         ? this.db
@@ -80,6 +84,13 @@ export class PlannerService {
           and(eq(travelTime.verificationStatus, VERIFIED), isNotNull(travelTime.normalMinutes)),
         ),
     ]);
+    // V2 §26: facts whose sources disagree are not facts until a person settles them.
+    const conflicts = await this.checks.conflicts();
+    const usable = <T extends { id: string }>(rows: T[]) =>
+      rows.filter((r) => !conflicts.rowIds.has(r.id));
+    const schedules = usable(allSchedules);
+    const specials = usable(allSpecials);
+    const travel = usable(allTravel);
     const placeById = new Map(places.map((p) => [p.id, p]));
     const placeOfTemple = new Map(
       places.filter((p) => p.templeId).map((p) => [p.templeId!, p.code]),
@@ -111,13 +122,15 @@ export class PlannerService {
     const facts: PlanningFacts = {
       temples: temples.map(({ t }) => {
         const verified = t.verificationStatus === VERIFIED;
+        const disputed = conflicts.templeFields.get(t.code);
+        const fact = <V>(field: string, v: V) => (verified && !disputed?.has(field) ? v : null);
         return {
           code: t.code,
           name: t.commonName,
           placeCode: placeOfTemple.get(t.id) ?? null,
-          visitMinutesNormal: verified ? t.visitMinutesNormal : null,
-          visitMinutesBusy: verified ? t.visitMinutesBusy : null,
-          wheelchairAccess: verified ? t.wheelchairAccess : null,
+          visitMinutesNormal: fact('visitMinutesNormal', t.visitMinutesNormal),
+          visitMinutesBusy: fact('visitMinutesBusy', t.visitMinutesBusy),
+          wheelchairAccess: fact('wheelchairAccess', t.wheelchairAccess),
           sessions: schedules
             .filter((s) => s.templeId === t.id)
             .map((s) => ({

@@ -368,6 +368,55 @@ ul.plain li {
 .checklist li.todo {
   color: var(--fg);
 }
+/* Data verification queue (V2 §26) */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0 0 1rem;
+  border-bottom: 1px solid var(--line);
+}
+.tabs a {
+  padding: 0.5rem 0.75rem;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tabs a[aria-current='page'] {
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.tabs .count {
+  margin-left: 0.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--line);
+  font-size: 0.8rem;
+}
+.fact-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+.fact-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.fact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin-top: 0.75rem;
+}
+.fact-item table {
+  /* Scrolls sideways on a phone instead of squeezing the sources into a narrow column. */
+  min-width: 42rem;
+}
+tr.conflict td {
+  background: var(--bad-bg);
+}
+
 dl.facts {
   display: grid;
   grid-template-columns: max-content 1fr;

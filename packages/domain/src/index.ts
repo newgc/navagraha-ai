@@ -15,3 +15,4 @@ export * from './planner/facts.js';
 export * from './planner/schedule.js';
 export * from './planner/day.js';
 export * from './planner/plan.js';
+export * from './facts/governance.js';

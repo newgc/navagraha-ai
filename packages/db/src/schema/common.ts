@@ -18,7 +18,10 @@ export const verificationStatus = pgEnum('verification_status', [
   'NEEDS_RECHECK',
 ]);
 
-/** Matches the Source type column of the temple data workbook. */
+/**
+ * Matches the Source type column of the temple data workbook, plus two sources that are only
+ * recorded on screen as a second check (V2 §26): our own operations and customers.
+ */
 export const sourceType = pgEnum('source_type', [
   'TEMPLE_OFFICE_IN_PERSON',
   'TEMPLE_OFFICE_PHONE',
@@ -28,6 +31,8 @@ export const sourceType = pgEnum('source_type', [
   'PARTNER_DRIVER_GUIDE',
   'MAPS_DATED',
   'OTHER',
+  'OPERATIONS_OBSERVATION',
+  'CUSTOMER_REPORT',
 ]);
 
 /**

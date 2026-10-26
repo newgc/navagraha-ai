@@ -107,6 +107,11 @@ export default async function TemplePage({ params }: { params: Promise<{ code: s
           <p className="muted">
             {t.graha} · {t.officialName ?? 'official name not recorded'} · {t.town}, {t.state}
           </p>
+          <p className="small">
+            <Link href={`/ops/temples/queue?view=all&temple=${t.code}`}>
+              Sources and second checks for this temple
+            </Link>
+          </p>
         </div>
         <Verification
           status={t.verificationStatus}

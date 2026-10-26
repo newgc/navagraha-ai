@@ -5,12 +5,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, or } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth.types.js';
 import { DB } from '../db/db.module.js';
-
-/**
- * Facts not re-verified within this many days are flagged for a re-check (EC-49).
- * A default for the pilot, not an approved policy — change it here if operations want another.
- */
-export const RECHECK_AFTER_DAYS = 180;
+import { FactChecksService, RECHECK_AFTER_DAYS } from './fact-checks.service.js';
 
 type Status = (typeof schema.verificationStatus.enumValues)[number];
 interface Provenanced {
@@ -38,7 +33,10 @@ function tally(rows: Provenanced[]) {
 /** Read-only views of temple master data plus workbook upload (NAV-TEM-001..003, MR-47..51). */
 @Injectable()
 export class TempleDataService {
-  constructor(@Inject(DB) private readonly db: Database) {}
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    @Inject(FactChecksService) private readonly checks: FactChecksService,
+  ) {}
 
   private async circuitTemples(circuitCode = 'NAVAGRAHA') {
     const [c] = await this.db
@@ -119,6 +117,7 @@ export class TempleDataService {
     const stale =
       rows.filter((r) => r.stale).length + rows.reduce((n, r) => n + r.schedules.needsRecheck, 0);
     const n = temples.length;
+    const conflicting = await this.checks.conflictCount();
 
     return {
       circuit: { code: circuit.code, name: circuit.name, status: circuit.status },
@@ -140,6 +139,12 @@ export class TempleDataService {
           of: pairsTotal,
         },
         { check: 'Verified facts due for a re-check', done: stale, of: 0, lowerIsBetter: true },
+        {
+          check: 'Facts with disagreeing sources (V2 §26)',
+          done: conflicting,
+          of: 0,
+          lowerIsBetter: true,
+        },
       ].map((c) => ({ ...c, ok: c.lowerIsBetter ? c.done === 0 : c.of > 0 && c.done === c.of })),
     };
   }

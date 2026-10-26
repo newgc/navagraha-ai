@@ -1,6 +1,7 @@
 import {
   boolean,
   date,
+  timestamp,
   doublePrecision,
   index,
   integer,
@@ -13,7 +14,8 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { id, provenance, timestamps } from './common.js';
+import { id, provenance, sourceType, timestamps } from './common.js';
+import { appUser } from './identity.js';
 
 export const circuitStatus = pgEnum('circuit_status', ['DRAFT', 'ACTIVE', 'RETIRED']);
 
@@ -197,3 +199,55 @@ export const entryRule = pgTable('entry_rule', {
   ...provenance(),
   ...timestamps(),
 });
+
+export const factSubject = pgEnum('fact_subject', [
+  'TEMPLE',
+  'SCHEDULE',
+  'SPECIAL_DAY',
+  'SERVICE',
+  'TRAVEL_TIME',
+]);
+/** SUPERSEDED: an accepted value that a person later replaced by verifying another one. */
+export const factCheckStatus = pgEnum('fact_check_status', [
+  'OPEN',
+  'ACCEPTED',
+  'REJECTED',
+  'SUPERSEDED',
+]);
+
+/**
+ * V2 §8 / §26 — an independent check of one fact from a second source. Keyed by the fact's
+ * natural key (e.g. `SCHEDULE:SURYA|Every day|Morning|2026-01-01`), not a row id, because a
+ * workbook import replaces rows. An OPEN check that disagrees with the current value makes the
+ * fact CONFLICTING (not used by the engine) until a person accepts or rejects it; so does the
+ * latest ACCEPTED one, when a later upload brings back a different value.
+ */
+export const factCheck = pgTable(
+  'fact_check',
+  {
+    id: id(),
+    subject: factSubject('subject').notNull(),
+    subjectKey: text('subject_key').notNull(),
+    templeCode: text('temple_code'),
+    field: text('field').notNull(),
+    /** Canonical text, comparable with the current value ("06:30", "yes", paise). */
+    value: text('value').notNull(),
+    source: text('source').notNull(),
+    sourceType: sourceType('source_type').notNull(),
+    sourceUrl: text('source_url'),
+    observedOn: date('observed_on').notNull(),
+    note: text('note'),
+    status: factCheckStatus('status').notNull().default('OPEN'),
+    recordedByUserId: uuid('recorded_by_user_id')
+      .notNull()
+      .references(() => appUser.id),
+    decidedByUserId: uuid('decided_by_user_id').references(() => appUser.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decisionNote: text('decision_note'),
+    ...timestamps(),
+  },
+  (t) => [
+    index('fact_check_subject_idx').on(t.subjectKey, t.field),
+    index('fact_check_status_idx').on(t.status),
+  ],
+);
